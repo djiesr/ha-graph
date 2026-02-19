@@ -25,9 +25,8 @@ Graph visualization panel for **Home Assistant**: devices, automations, scripts,
 1. **Copy the file** into the directory served by Home Assistant:
    - Copy `www/ha-graph.html` into your HA **`config/www/`** folder (create `www` if needed).
 
-2. **Add an iframe card** to a Lovelace dashboard:
-   - **Settings → Dashboards →** add an **iframe card**.
-   - Iframe URL:  
+2. **Add a Web Page card** to a dashboard:
+   - **Settings → Dashboards →** add a **Web Page** card, then enter the URL:
      `https://YOUR_HA:8123/local/ha-graph.html`  
      (adjust domain/port if needed).
 
@@ -35,7 +34,7 @@ Graph visualization panel for **Home Assistant**: devices, automations, scripts,
 
 ## Usage
 
-1. Open the dashboard that contains the iframe card.
+1. Open the dashboard that contains the Web Page card.
 2. If prompted: enter your **token** (base URL is pre-filled).
 3. The graph loads (devices + automation/script relations, etc.).
 4. **Click a node** → right panel with state, sensors, controls and buttons to run scripts/automations.
@@ -82,9 +81,8 @@ Panneau de visualisation en graphe pour **Home Assistant** : appareils, automati
 1. **Copier le fichier** dans le répertoire exposé par Home Assistant :
    - Copier `www/ha-graph.html` dans le dossier **`config/www/`** de votre installation HA (créer `www` si besoin).
 
-2. **Ajouter une carte iframe** à un tableau de bord Lovelace :
-   - **Paramètres → Tableaux de bord →** ajouter une carte **« Carte iframe »** (ou **« Carte de type : iframe »**).
-   - URL de l’iframe :  
+2. **Ajouter une carte Page Web** à un tableau de bord :
+   - **Paramètres → Tableaux de bord →** ajouter une carte **« Page Web »**, puis entrer l’URL :
      `https://VOTRE_HA:8123/local/ha-graph.html`  
      (adapter le domaine/port si besoin).
 
@@ -92,7 +90,7 @@ Panneau de visualisation en graphe pour **Home Assistant** : appareils, automati
 
 ### Utilisation
 
-1. Ouvrir le tableau de bord qui contient la carte iframe.
+1. Ouvrir le tableau de bord qui contient la carte Page Web.
 2. Si demandé : saisir le **token** d’accès (l’URL de base est préremplie).
 3. Le graphe se charge (appareils + relations automation/script, etc.).
 4. **Clic sur un nœud** → panneau de droite avec état, capteurs, contrôles et boutons pour exécuter scripts/automations.
