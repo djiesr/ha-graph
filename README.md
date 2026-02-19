@@ -23,7 +23,7 @@ Panneau de visualisation en graphe pour **Home Assistant** : appareils, automati
 
 1. **Télécharger le projet** (ou cloner) :
    ```bash
-   git clone https://github.com/VOTRE_UTILISATEUR/ha-graph.git
+   git clone https://github.com/djiesr/ha-graph.git
    cd ha-graph
    ```
 
