@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -90,6 +90,8 @@
       border-color: var(--text-dim);
     }
     #toolbar button.primary { background: #0f3460; color: var(--on); }
+    .lang-btn { min-width: 28px; padding: 4px 8px; font-size: 12px; }
+    .lang-btn.active { background: var(--on); color: var(--bg); border-color: var(--on); }
     /* Grid 3D (isometric) */
     #graph-container {
       flex: 1;
@@ -229,6 +231,8 @@
       font-weight: 600;
     }
     #auth-panel button:hover { opacity: 0.9; }
+    #auth-panel button.secondary { background: var(--accent); color: var(--text); }
+    #auth-panel button.secondary:hover { background: #1a3a5c; }
     #auth-panel .hint { font-size: 12px; color: var(--text-dim); margin-top: 12px; }
     /* Status */
     #status {
@@ -264,25 +268,36 @@
   <div id="app">
     <div id="auth-panel">
       <div class="card">
-        <h2 style="margin-top:0;">HA Graph Explorer v2</h2>
-        <p style="color: var(--text-dim); font-size: 14px;">Collez votre token d'accès long durée Home Assistant.</p>
-        <label for="base-url-input">URL de base (optionnel)</label>
-        <input type="text" id="base-url-input" placeholder="https://homeassistant.local:8123" autocomplete="off">
-        <p class="hint" style="margin-top:0;">Laissez vide pour utiliser l’URL actuelle (ex. si ouvert depuis HA).</p>
-        <label for="token-input">Token d'accès</label>
-        <input type="password" id="token-input" placeholder="eyJhbGc..." autocomplete="off">
-        <button type="button" id="auth-save">Enregistrer et se connecter</button>
-        <p class="hint">Profil HA → Token d'accès → Créer un token. Le token est stocké localement dans ce navigateur.</p>
+        <h2 style="margin-top:0;" data-i18n="auth_title">HA Graph Explorer v2</h2>
+        <p style="color: var(--text-dim); font-size: 14px;" data-i18n="auth_subtitle">Paste your token.</p>
+        <label for="base-url-input" data-i18n="auth_baseUrl">Base URL (optional)</label>
+        <input type="text" id="base-url-input" data-i18n-placeholder="auth_baseUrlPlaceholder" autocomplete="off">
+        <p class="hint" style="margin-top:0;" data-i18n="auth_baseUrlHint">Laissez vide pour utiliser l’URL actuelle (ex. si ouvert depuis HA).</p>
+        <label for="token-input" data-i18n="auth_token">Access token</label>
+        <input type="password" id="token-input" data-i18n-placeholder="auth_tokenPlaceholder" autocomplete="off">
+        <button type="button" id="auth-save" data-i18n="auth_save">Save and connect</button>
+        <button type="button" id="auth-close" class="secondary" style="margin-left:8px;" data-i18n="auth_close">Close</button>
+        <p class="hint" data-i18n="auth_tokenHint"></p>
+        <hr style="border:none; border-top:1px solid var(--accent); margin:16px 0;">
+        <p style="font-size:13px; color:var(--text-dim); margin-bottom:8px;" data-i18n="backup_heading"></p>
+        <label style="display:block; margin-bottom:8px;"><input type="checkbox" id="export-include-token"> <span data-i18n="backup_includeToken">Include token</span></label>
+        <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+          <button type="button" id="btn-export-backup" data-i18n="backup_export">Export backup</button>
+          <button type="button" id="btn-import-backup" data-i18n="backup_import">Restore backup</button>
+          <input type="file" id="import-backup-file" accept=".json,application/json" style="display:none;">
+        </div>
       </div>
     </div>
     <div id="toolbar">
-      <input type="text" id="search" placeholder="Rechercher (entity_id ou nom)...">
-      <button type="button" id="btn-reset-layout" title="Réappliquer le layout force-directed">Réinitialiser layout</button>
-      <button type="button" id="btn-center" title="Centrer la vue sur l’ensemble des nœuds">Centrer</button>
-      <label><input type="checkbox" id="orphans"> Afficher orphelins</label>
+      <span id="lang-switcher" style="margin-right:4px;"><button type="button" class="lang-btn" data-lang="en">EN</button><button type="button" class="lang-btn" data-lang="fr">FR</button></span>
+      <input type="text" id="search" data-i18n-placeholder="search_placeholder">
+      <button type="button" id="btn-reset-layout" data-i18n-title="btn_reset_layout_title"><span data-i18n="btn_reset_layout">Reset layout</span></button>
+      <button type="button" id="btn-center" data-i18n-title="btn_center_title"><span data-i18n="btn_center">Center</span></button>
+      <label><input type="checkbox" id="orphans"> <span data-i18n="orphans_label">Show orphans</span></label>
       <span id="domain-filters"></span>
+      <button type="button" id="btn-backup" data-i18n-title="btn_backup_title"><span data-i18n="btn_backup">Backup</span></button>
       <span style="margin-left:auto; display:flex; flex-direction:column; align-items:flex-end;">
-        <span id="status">Déconnecté</span>
+        <span id="status" data-i18n="status_disconnected">Disconnected</span>
         <div id="progress-bar" style="display:none; width:160px;"><div class="fill"></div></div>
         <span id="progress-text"></span>
       </span>
@@ -292,7 +307,7 @@
       <div id="cy"></div>
     </div>
     <aside id="sidebar">
-      <button type="button" id="sidebar-close" aria-label="Fermer">&times;</button>
+      <button type="button" id="sidebar-close" aria-label="Close" data-i18n-aria="close_aria">&times;</button>
       <div id="sidebar-content"></div>
     </aside>
   </div>
@@ -315,18 +330,190 @@
   const STORAGE_TOKEN = 'ha_graph_token';
   const STORAGE_LAYOUT = 'ha_graph_layout';
   const STORAGE_BASE = 'ha_graph_base';
+  const STORAGE_LANG = 'ha_graph_lang';
+
+  const L10N = {
+    en: {
+      auth_title: 'HA Graph Explorer v2',
+      auth_subtitle: 'Paste your Home Assistant long-lived access token.',
+      auth_baseUrl: 'Base URL (optional)',
+      auth_baseUrlPlaceholder: 'https://homeassistant.local:8123',
+      auth_baseUrlHint: 'Leave empty to use the current URL (e.g. when opened from HA).',
+      auth_token: 'Access token',
+      auth_tokenPlaceholder: 'eyJhbGc...',
+      auth_save: 'Save and connect',
+      auth_close: 'Close',
+      auth_tokenHint: 'Profile → Security → Long-lived access tokens → Create a token.',
+      backup_heading: 'Backup (so you don\'t lose settings when changing device or clearing cache)',
+      backup_includeToken: 'Include token in file',
+      backup_export: 'Export backup',
+      backup_import: 'Restore backup',
+      search_placeholder: 'Search (entity_id or name)...',
+      btn_reset_layout: 'Reset layout',
+      btn_reset_layout_title: 'Re-apply force-directed layout',
+      btn_center: 'Center',
+      btn_center_title: 'Center view on all nodes',
+      orphans_label: 'Show orphans',
+      btn_backup: 'Backup',
+      btn_backup_title: 'Backup or restore (export/import)',
+      status_disconnected: 'Disconnected',
+      status_connected: 'Connected',
+      status_loading: 'Loading...',
+      status_invalid_token: 'Invalid token',
+      status_connected_nodes: 'Connected ({n} nodes)',
+      status_error: 'Error: {msg}',
+      progress_fetching: 'Fetching entities and registries...',
+      progress_entities_devices: 'Entities: {entities} | Devices: {devices}',
+      progress_building: 'Building graph (devices)...',
+      progress_rendering: 'Rendering ({nodes} nodes, {edges} edges)...',
+      progress_devices: 'Devices: {current}/{total}',
+      progress_nodes_devices: 'Device nodes...',
+      progress_automations_scripts: 'Automation / script / group nodes...',
+      progress_links: 'Links (groups / scenes)...',
+      progress_automations_search: 'Fetching automations / scripts...',
+      links_title: 'Links ({n})',
+      controls_sensors: 'Controls & sensors',
+      no_entities: 'No entities',
+      node_unknown: 'Unknown node',
+      device_entities_count: 'Device · {n} entity(ies)',
+      btn_run: 'Run',
+      btn_trigger: 'Trigger',
+      btn_enable: 'Enable',
+      btn_disable: 'Disable',
+      btn_open: 'Open',
+      btn_close_cover: 'Close',
+      btn_stop: 'Stop',
+      btn_lock: 'Lock',
+      btn_unlock: 'Unlock',
+      on: 'On',
+      off: 'Off',
+      attr_state: 'State',
+      close_aria: 'Close',
+      invalid_backup: 'Invalid backup file.',
+      domain_device: 'Devices',
+      domain_automation: 'Automations',
+      domain_script: 'Scripts',
+      domain_scene: 'Scenes',
+      domain_group: 'Groups',
+      domain_zone: 'Zones'
+    },
+    fr: {
+      auth_title: 'HA Graph Explorer v2',
+      auth_subtitle: 'Collez votre token d\'accès long durée Home Assistant.',
+      auth_baseUrl: 'URL de base (optionnel)',
+      auth_baseUrlPlaceholder: 'https://homeassistant.local:8123',
+      auth_baseUrlHint: 'Laissez vide pour utiliser l\'URL actuelle (ex. si ouvert depuis HA).',
+      auth_token: 'Token d\'accès',
+      auth_tokenPlaceholder: 'eyJhbGc...',
+      auth_save: 'Enregistrer et se connecter',
+      auth_close: 'Fermer',
+      auth_tokenHint: 'Profil HA → Sécurité → Tokens d\'accès → Créer un token.',
+      backup_heading: 'Sauvegarde (pour ne rien perdre en changeant d\'ordinateur ou en vidant le cache)',
+      backup_includeToken: 'Inclure le token dans le fichier',
+      backup_export: 'Exporter une sauvegarde',
+      backup_import: 'Restaurer une sauvegarde',
+      search_placeholder: 'Rechercher (entity_id ou nom)...',
+      btn_reset_layout: 'Réinitialiser layout',
+      btn_reset_layout_title: 'Réappliquer le layout force-directed',
+      btn_center: 'Centrer',
+      btn_center_title: 'Centrer la vue sur l\'ensemble des nœuds',
+      orphans_label: 'Afficher orphelins',
+      btn_backup: 'Sauvegarde',
+      btn_backup_title: 'Sauvegarder ou restaurer (export/import)',
+      status_disconnected: 'Déconnecté',
+      status_connected: 'Connecté',
+      status_loading: 'Chargement...',
+      status_invalid_token: 'Token invalide',
+      status_connected_nodes: 'Connecté ({n} nœuds)',
+      status_error: 'Erreur : {msg}',
+      progress_fetching: 'Récupération entités et registres...',
+      progress_entities_devices: 'Entités : {entities} | Appareils : {devices}',
+      progress_building: 'Construction graphe (appareils)...',
+      progress_rendering: 'Rendu ({nodes} nœuds, {edges} liens)...',
+      progress_devices: 'Appareils : {current}/{total}',
+      progress_nodes_devices: 'Nœuds appareils...',
+      progress_automations_scripts: 'Nœuds automations / scripts / groupes...',
+      progress_links: 'Liens (groupes / scènes)...',
+      progress_automations_search: 'Recherche automations / scripts...',
+      links_title: 'Liens ({n})',
+      controls_sensors: 'Contrôles & capteurs',
+      no_entities: 'Aucune entité',
+      node_unknown: 'Nœud inconnu',
+      device_entities_count: 'Appareil · {n} entité(s)',
+      btn_run: 'Exécuter',
+      btn_trigger: 'Déclencher',
+      btn_enable: 'Activer',
+      btn_disable: 'Désactiver',
+      btn_open: 'Ouvrir',
+      btn_close_cover: 'Fermer',
+      btn_stop: 'Stop',
+      btn_lock: 'Verrouiller',
+      btn_unlock: 'Déverrouiller',
+      on: 'On',
+      off: 'Off',
+      attr_state: 'État',
+      close_aria: 'Fermer',
+      invalid_backup: 'Fichier de sauvegarde invalide.',
+      domain_device: 'Appareils',
+      domain_automation: 'Automations',
+      domain_script: 'Scripts',
+      domain_scene: 'Scènes',
+      domain_group: 'Groupes',
+      domain_zone: 'Zones'
+    }
+  };
+
+  let currentLang = (localStorage.getItem(STORAGE_LANG) || 'en').slice(0, 2);
+  if (currentLang !== 'en' && currentLang !== 'fr') currentLang = 'en';
+
+  function t(key, vars) {
+    let s = (L10N[currentLang] && L10N[currentLang][key]) || L10N.en[key] || key;
+    if (vars && typeof s === 'string') {
+      Object.keys(vars).forEach(k => { s = s.replace(new RegExp('\\{' + k + '\\}', 'g'), vars[k]); });
+    }
+    return s;
+  }
+
+  function getDomainLabels() {
+    return [
+      { id: 'device', label: t('domain_device'), icon: 'fa-microchip' },
+      { id: 'automation', label: t('domain_automation'), icon: 'fa-robot' },
+      { id: 'script', label: t('domain_script'), icon: 'fa-code' },
+      { id: 'scene', label: t('domain_scene'), icon: 'fa-palette' },
+      { id: 'group', label: t('domain_group'), icon: 'fa-layer-group' },
+      { id: 'zone', label: t('domain_zone'), icon: 'fa-map-marker-alt' }
+    ];
+  }
 
   const VIRTUAL_DOMAINS = new Set(['automation', 'script', 'scene', 'group', 'zone']);
-  const DOMAINS = [
-    { id: 'device', label: 'Appareils', icon: 'fa-microchip' },
-    { id: 'automation', label: 'Automations', icon: 'fa-robot' },
-    { id: 'script', label: 'Scripts', icon: 'fa-code' },
-    { id: 'scene', label: 'Scènes', icon: 'fa-palette' },
-    { id: 'group', label: 'Groupes', icon: 'fa-layer-group' },
-    { id: 'zone', label: 'Zones', icon: 'fa-map-marker-alt' }
-  ];
-
+  const DOMAINS = getDomainLabels();
   const DOMAIN_ICONS = Object.fromEntries(DOMAINS.map(d => [d.id, d.icon]));
+
+  function applyI18n() {
+    document.documentElement.lang = currentLang === 'fr' ? 'fr' : 'en';
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      if (key) el.textContent = t(key);
+    });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+      const key = el.getAttribute('data-i18n-placeholder');
+      if (key) el.placeholder = t(key);
+    });
+    document.querySelectorAll('[data-i18n-title]').forEach(el => {
+      const key = el.getAttribute('data-i18n-title');
+      if (key) el.title = t(key);
+    });
+    document.querySelectorAll('[data-i18n-aria]').forEach(el => {
+      const key = el.getAttribute('data-i18n-aria');
+      if (key) el.setAttribute('aria-label', t(key));
+    });
+    const statusEl = document.getElementById('status');
+    if (statusEl && (statusEl.textContent === 'Disconnected' || statusEl.textContent === 'Déconnecté')) statusEl.textContent = t('status_disconnected');
+    document.querySelectorAll('.lang-btn').forEach(btn => { btn.classList.toggle('active', btn.dataset.lang === currentLang); });
+    const titleEl = document.querySelector('title');
+    if (titleEl) titleEl.textContent = t('auth_title');
+  }
+
   const DOMAIN_EMOJI = {
     device: '📟',
     automation: '🤖',
@@ -393,7 +580,7 @@
     const wsUrl = (baseUrl.replace(/^http/, 'ws') + '/api/websocket').replace('//api', '/api');
     ws = new WebSocket(wsUrl);
     ws.onopen = () => {
-      setStatus('WebSocket ouvert', true);
+      setStatus(t('status_loading'), true);
     };
     ws.onmessage = (ev) => {
       const msg = JSON.parse(ev.data);
@@ -402,13 +589,13 @@
         return;
       }
       if (msg.type === 'auth_ok') {
-        setStatus('Connecté', true);
+        setStatus(t('status_connected'), true);
         loadData();
         subscribeStateChanged();
         return;
       }
       if (msg.type === 'auth_invalid') {
-        setStatus('Token invalide', false);
+        setStatus(t('status_invalid_token'), false);
         showAuth(true);
         return;
       }
@@ -431,7 +618,7 @@
       }
     };
     ws.onclose = () => {
-      setStatus('Déconnecté', false);
+      setStatus(t('status_disconnected'), false);
       wsReconnectTimer = setTimeout(wsConnect, 3000);
     };
     ws.onerror = () => {};
@@ -465,8 +652,8 @@
   }
 
   function loadData() {
-    setStatus('Chargement...', true);
-    setProgress(true, 5, 'Récupération entités et registres...');
+    setStatus(t('status_loading'), true);
+    setProgress(true, 5, t('progress_fetching'));
     Promise.all([
       wsSend('get_states'),
       wsSend('config/device_registry/list').catch(() => []),
@@ -476,7 +663,7 @@
       const rawDevices = devices || [];
       deviceRegistry = Array.isArray(rawDevices) ? rawDevices : (rawDevices.devices || []);
       const entities = Array.isArray(entitiesRaw) ? entitiesRaw : (entitiesRaw && entitiesRaw.length !== undefined ? entitiesRaw : []);
-      setProgress(true, 15, 'Entités : ' + list.length + ' | Appareils : ' + deviceRegistry.length);
+      setProgress(true, 15, t('progress_entities_devices', { entities: list.length, devices: deviceRegistry.length }));
       states = list.reduce((acc, s) => {
         acc[s.entity_id] = s;
         return acc;
@@ -499,17 +686,17 @@
           deviceToEntities[did].push(eid);
         }
       });
-      setProgress(true, 25, 'Construction graphe (appareils)...');
+      setProgress(true, 25, t('progress_building'));
       return buildGraphFromDevices();
     }).then(() => {
-      setProgress(true, 85, 'Rendu (' + graphData.nodes.length + ' nœuds, ' + graphData.edges.length + ' liens)...');
+      setProgress(true, 85, t('progress_rendering', { nodes: graphData.nodes.length, edges: graphData.edges.length }));
       renderGraph();
       loadLayoutFromStorage();
       setProgress(false);
-      setStatus('Connecté (' + graphData.nodes.length + ' nœuds)', true);
+      setStatus(t('status_connected_nodes', { n: graphData.nodes.length }), true);
     }).catch(err => {
       setProgress(false);
-      setStatus('Erreur: ' + (err.message || err), false);
+      setStatus(t('status_error', { msg: err.message || err }), false);
     });
   }
 
@@ -609,9 +796,9 @@
     const nodes = [];
     const entityEdges = [];
 
-    setProgress(true, 30, 'Nœuds appareils...');
+    setProgress(true, 30, t('progress_nodes_devices'));
     deviceRegistry.forEach((dev, i) => {
-      if (i % 100 === 0 && deviceRegistry.length > 100) setProgress(true, 30 + (i / deviceRegistry.length) * 20, 'Appareils : ' + (i + 1) + '/' + deviceRegistry.length);
+      if (i % 100 === 0 && deviceRegistry.length > 100) setProgress(true, 30 + (i / deviceRegistry.length) * 20, t('progress_devices', { current: i + 1, total: deviceRegistry.length }));
       const id = dev.id;
       const name = dev.name_by_user || dev.name || 'Sans nom';
       const state = deviceAggregatedState(id);
@@ -627,7 +814,7 @@
       });
     });
 
-    setProgress(true, 52, 'Nœuds automations / scripts / groupes...');
+    setProgress(true, 52, t('progress_automations_scripts'));
     Object.keys(states).forEach(entityId => {
       const domain = entityDomain(entityId);
       if (!VIRTUAL_DOMAINS.has(domain)) return;
@@ -645,7 +832,7 @@
       });
     });
 
-    setProgress(true, 58, 'Liens (groupes / scènes)...');
+    setProgress(true, 58, t('progress_links'));
     Object.values(states).forEach(s => {
       const domain = entityDomain(s.entity_id);
       const attrs = s.attributes || {};
@@ -661,7 +848,7 @@
       }
     });
 
-    setProgress(true, 62, 'Recherche automations / scripts...');
+    setProgress(true, 62, t('progress_automations_search'));
     return tryFetchAutomationScriptEdges(entityEdges, new Set(Object.keys(states))).then(() => {
       entityEdges.forEach(({ target: tgtE }) => {
         const tgtN = entityToNodeId(tgtE);
@@ -953,19 +1140,19 @@
     const st = s ? s.state : '';
     if (st === 'unavailable') return '';
     const e = (d, svc, label, primary) => `<button type="button" class="ha-control ${primary ? 'primary' : ''}" data-entity-id="${escapeHtml(entityId)}" data-domain="${escapeHtml(d)}" data-service="${escapeHtml(svc)}">${escapeHtml(label)}</button>`;
-    if (domain === 'script') return `<div class="sidebar-controls">${e('script', 'turn_on', 'Exécuter', true)}</div>`;
+    if (domain === 'script') return `<div class="sidebar-controls">${e('script', 'turn_on', t('btn_run'), true)}</div>`;
     if (domain === 'automation') {
-      return `<div class="sidebar-controls">${e('automation', 'trigger', 'Déclencher', true)} ${e('automation', 'turn_on', 'Activer', false)} ${e('automation', 'turn_off', 'Désactiver', false)}</div>`;
+      return `<div class="sidebar-controls">${e('automation', 'trigger', t('btn_trigger'), true)} ${e('automation', 'turn_on', t('btn_enable'), false)} ${e('automation', 'turn_off', t('btn_disable'), false)}</div>`;
     }
-    if (domain === 'scene') return `<div class="sidebar-controls">${e('scene', 'turn_on', 'Activer', true)}</div>`;
+    if (domain === 'scene') return `<div class="sidebar-controls">${e('scene', 'turn_on', t('btn_enable'), true)}</div>`;
     if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'input_boolean') {
-      return `<div class="sidebar-controls">${e(domain, 'turn_on', 'On')} ${e(domain, 'turn_off', 'Off')}</div>`;
+      return `<div class="sidebar-controls">${e(domain, 'turn_on', t('on'))} ${e(domain, 'turn_off', t('off'))}</div>`;
     }
     if (domain === 'cover') {
-      return `<div class="sidebar-controls">${e('cover', 'open_cover', 'Ouvrir')} ${e('cover', 'close_cover', 'Fermer')} ${e('cover', 'stop_cover', 'Stop')}</div>`;
+      return `<div class="sidebar-controls">${e('cover', 'open_cover', t('btn_open'))} ${e('cover', 'close_cover', t('btn_close_cover'))} ${e('cover', 'stop_cover', t('btn_stop'))}</div>`;
     }
     if (domain === 'lock') {
-      return `<div class="sidebar-controls">${e('lock', 'lock', 'Verrouiller')} ${e('lock', 'unlock', 'Déverrouiller')}</div>`;
+      return `<div class="sidebar-controls">${e('lock', 'lock', t('btn_lock'))} ${e('lock', 'unlock', t('btn_unlock'))}</div>`;
     }
     return '';
   }
@@ -977,7 +1164,7 @@
     const lines = [];
     if (s.state !== undefined && s.state !== null) {
       const u = attrs.unit_of_measurement ? ` ${attrs.unit_of_measurement}` : '';
-      lines.push(`État: ${s.state}${u}`);
+      lines.push(t('attr_state') + ': ' + s.state + u);
     }
     show.forEach(k => { if (k !== 'unit_of_measurement' && attrs[k] !== undefined) lines.push(`${k}: ${attrs[k]}`); });
     return lines.length ? `<div class="entity-attr">${lines.map(l => escapeHtml(l)).join(' · ')}</div>` : '';
@@ -993,7 +1180,7 @@
     const linkLabel = (id) => (graphData.nodes.find(n => n.id === id) || {}).label || id;
     const linksHtml = `
       <div class="links-section">
-        <h3>Liens (${links.length})</h3>
+        <h3>${t('links_title', { n: links.length })}</h3>
         <ul>
           ${out.map(e => `<li>→ ${escapeHtml(linkLabel(e.target))} (${e.type})</li>`).join('')}
           ${inc.map(e => `<li>← ${escapeHtml(linkLabel(e.source))} (${e.type})</li>`).join('')}
@@ -1001,7 +1188,7 @@
       </div>`;
 
     if (!node) {
-      content.innerHTML = '<p>Nœud inconnu</p>';
+      content.innerHTML = '<p>' + t('node_unknown') + '</p>';
       document.getElementById('sidebar').classList.add('open');
       return;
     }
@@ -1027,9 +1214,9 @@
       content.innerHTML = `
         <h2>${escapeHtml(node.label)}</h2>
         <div class="state-badge ${node.state === 'unavailable' ? 'unavailable' : (node.state === 'on' ? 'on' : 'off')}">${escapeHtml(node.state)}</div>
-        <p style="font-size:12px;color:var(--text-dim);">Appareil · ${entityIds.length} entité(s)</p>
-        <div class="links-section"><h3>Contrôles & capteurs</h3></div>
-        ${entityBlocks || '<p style="font-size:13px;color:var(--text-dim);">Aucune entité</p>'}
+        <p style="font-size:12px;color:var(--text-dim);">${t('device_entities_count', { n: entityIds.length })}</p>
+        <div class="links-section"><h3>${t('controls_sensors')}</h3></div>
+        ${entityBlocks || '<p style="font-size:13px;color:var(--text-dim);">' + t('no_entities') + '</p>'}
         ${linksHtml}
       `;
     } else {
@@ -1141,6 +1328,41 @@
     }
   }
 
+  function exportBackup(includeToken) {
+    const baseUrl = getBaseUrl();
+    const layout = getStoredLayout();
+    const data = {
+      version: 1,
+      baseUrl: baseUrl || undefined,
+      layout: layout || undefined,
+      token: includeToken ? getToken() || undefined : undefined
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'ha-graph-backup.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function importBackup(file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        if (data.baseUrl != null) setBaseUrl(String(data.baseUrl).replace(/\/$/, ''));
+        if (data.layout != null) localStorage.setItem(STORAGE_LAYOUT, JSON.stringify(data.layout));
+        if (data.token != null) setToken(data.token);
+        document.getElementById('base-url-input').value = data.baseUrl != null ? data.baseUrl : getBaseUrl();
+        if (data.token) document.getElementById('token-input').value = '';
+        location.reload();
+      } catch (e) {
+        alert(t('invalid_backup'));
+      }
+    };
+    reader.readAsText(file);
+  }
+
   function initAuthPanel() {
     const baseInput = document.getElementById('base-url-input');
     const storedBase = localStorage.getItem(STORAGE_BASE);
@@ -1162,6 +1384,28 @@
     if (ws) ws.close();
     wsConnect();
   };
+  document.getElementById('auth-close').onclick = () => showAuth(false);
+  document.getElementById('btn-backup').onclick = () => showAuth(true);
+  document.getElementById('btn-export-backup').onclick = () => {
+    const includeToken = document.getElementById('export-include-token').checked;
+    exportBackup(includeToken);
+  };
+  document.getElementById('btn-import-backup').onclick = () => document.getElementById('import-backup-file').click();
+  document.getElementById('import-backup-file').onchange = (e) => {
+    const f = e.target.files[0];
+    if (f) importBackup(f);
+    e.target.value = '';
+  };
+  document.querySelectorAll('.lang-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const lang = btn.dataset.lang;
+      if (lang && (lang === 'en' || lang === 'fr')) {
+        localStorage.setItem(STORAGE_LANG, lang);
+        location.reload();
+      }
+    });
+  });
+  applyI18n();
   initAuthPanel();
 })();
   </script>
