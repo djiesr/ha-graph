@@ -11,7 +11,8 @@ Panneau de visualisation en graphe pour **Home Assistant** : appareils, automati
 - **Sidebar** : au clic sur un nœud — état, capteurs (température, batterie, etc.), **contrôles** (lumière, interrupteur, volet, serrure…) et **exécution** de scripts / automations
 - Recherche, filtres par type, affichage des orphelins, boutons **Centrer** et **Réinitialiser layout**
 - Layout force-directed (Cola) avec espacement et arêtes lisibles
-- 
+
+Image:
 <img width="2436" height="1222" alt="image" src="https://github.com/user-attachments/assets/88c8ebd4-b681-47d7-92eb-a3c176c79d9b" />
 
 ## Prérequis
