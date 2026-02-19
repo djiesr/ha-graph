@@ -22,44 +22,21 @@ Image:
 
 ## Installation
 
-### Option 1 : Utilisation standalone (n’importe quel navigateur)
+1. **Copier le fichier** dans le répertoire exposé par Home Assistant :
+   - Copier `www/ha-graph.html` dans le dossier **`config/www/`** de votre installation HA (créer `www` si besoin).
 
-1. **Télécharger le projet** (ou cloner) :
-   ```bash
-   git clone https://github.com/djiesr/ha-graph.git
-   cd ha-graph
-   ```
-
-2. **Servir la page** (éviter d’ouvrir le fichier directement à cause des CORS/WebSocket) :
-   - Soit avec un serveur HTTP local, par exemple :
-     ```bash
-     cd www
-     python -m http.server 8080
-     ```
-     Puis ouvrir : `http://localhost:8080/ha-graph.html`
-   - Soit en plaçant le dossier `www` dans un serveur web de votre choix (Apache, nginx, etc.) et en accédant à `ha-graph.html` via l’URL correspondante.
-
-3. **Première connexion** : saisir l’URL de base de Home Assistant (ex. `https://homeassistant.local:8123`) et le token. Les deux sont stockés localement dans le navigateur.
-
-### Option 2 : Intégration dans Home Assistant (panneau)
-
-Pour avoir le graphe dans l’interface HA :
-
-1. **Copier le fichier** dans le répertoire exposé par HA :
-   - Copier `www/ha-graph.html` dans le dossier **`config/www/`** de votre installation Home Assistant (créer `www` si besoin).
-
-2. **Ajouter un tableau de bord Lovelace** (ou modifier un existant) :
+2. **Ajouter une carte iframe** à un tableau de bord Lovelace :
    - **Paramètres → Tableaux de bord →** ajouter une carte **« Carte iframe »** (ou **« Carte de type : iframe »**).
    - URL de l’iframe :  
      `https://VOTRE_HA:8123/local/ha-graph.html`  
-     (adapter le domaine si vous n’utilisez pas `https` ou un autre port).
+     (adapter le domaine/port si besoin).
 
-3. **Alternative (custom panel)** : vous pouvez aussi exposer cette page comme panneau personnalisé via une intégration « Custom panel » ou un add-on qui sert des fichiers depuis `config/www/`.
+3. **Première ouverture** : saisir votre **token** d’accès long durée (l’URL de base est déjà celle de HA). Le token est stocké localement dans le navigateur.
 
 ## Utilisation
 
-1. Ouvrir la page (standalone ou via l’iframe dans HA).
-2. Si demandé : **URL de base** (optionnel si vous êtes déjà sur le même domaine que HA) et **token**.
+1. Ouvrir le tableau de bord qui contient la carte iframe.
+2. Si demandé : saisir le **token** d’accès (l’URL de base est préremplie).
 3. Le graphe se charge (appareils + relations automation/script, etc.).
 4. **Clic sur un nœud** → panneau de droite avec état, capteurs, contrôles et boutons pour exécuter scripts/automations.
 5. **Recherche**, **filtres par type**, **Centrer**, **Réinitialiser layout** selon besoin.
