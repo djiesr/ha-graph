@@ -2,8 +2,6 @@
 
 Graph visualization panel for **Home Assistant**: devices, automations, scripts, scenes, groups and zones with their relationships. 2D view (Cytoscape.js + Cola), controls and run actions from the side panel. **English / Français** (language switcher in the toolbar).
 
-![HA Graph Explorer](https://img.shields.io/badge/Home%20Assistant-Graph%20Explorer-v2-blue)
-
 ## Features
 
 - **Graph**: nodes = devices + automations/scripts/scenes/groups/zones, edges = relationships (trigger, action, member, target)
