@@ -1,0 +1,11 @@
+# Copie de sauvegarde
+*- Copie*
+*.bak
+# OS
+.DS_Store
+Thumbs.db
+# IDE
+.idea
+.vscode
+*.swp
+*.swo

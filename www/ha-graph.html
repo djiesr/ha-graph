@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HA Graph Explorer v2</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    :root {
+      --bg: #1a1a2e;
+      --surface: #16213e;
+      --accent: #0f3460;
+      --text: #e8e8e8;
+      --text-dim: #a0a0a0;
+      --on: #a8e6cf;
+      --off: #6c757d;
+      --unavailable: #e94560;
+      --edge-trigger: #ff9a8b;
+      --edge-action: #ffecd2;
+      --edge-member: #a8e6cf;
+      --edge-target: #d4a5a5;
+      --shadow: rgba(0,0,0,0.4);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+      height: 100vh;
+    }
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    /* Toolbar */
+    #toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--accent);
+      flex-shrink: 0;
+    }
+    #toolbar input[type="text"] {
+      background: var(--accent);
+      border: 1px solid transparent;
+      color: var(--text);
+      padding: 6px 10px;
+      border-radius: 6px;
+      width: 200px;
+      transition: border-color 0.2s;
+    }
+    #toolbar input::placeholder { color: var(--text-dim); }
+    #toolbar input:focus {
+      outline: none;
+      border-color: var(--on);
+    }
+    #toolbar label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text-dim);
+    }
+    #toolbar label input { width: auto; margin: 0; }
+    #domain-filters {
+      display: inline-flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 12px;
+    }
+    #toolbar button {
+      background: var(--accent);
+      border: 1px solid transparent;
+      color: var(--text);
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    #toolbar button:hover {
+      background: #1a3a5c;
+      border-color: var(--text-dim);
+    }
+    #toolbar button.primary { background: #0f3460; color: var(--on); }
+    /* Grid 3D (isometric) */
+    #graph-container {
+      flex: 1;
+      position: relative;
+      min-height: 0;
+    }
+    #grid-3d {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 24px 24px;
+      transform: scaleY(0.866) rotateX(60deg) rotateZ(0deg);
+      transform-style: preserve-3d;
+      perspective: 1200px;
+      pointer-events: none;
+    }
+    #cy {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+    }
+    /* Sidebar */
+    #sidebar {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 320px;
+      max-width: 90vw;
+      height: 100%;
+      background: var(--surface);
+      border-left: 1px solid var(--accent);
+      box-shadow: -4px 0 20px var(--shadow);
+      z-index: 10;
+      transform: translateX(100%);
+      transition: transform 0.3s ease;
+      overflow-y: auto;
+      padding: 16px;
+    }
+    #sidebar.open { transform: translateX(0); }
+    #sidebar h2 {
+      margin: 0 0 12px;
+      font-size: 18px;
+      color: var(--text);
+      word-break: break-all;
+    }
+    #sidebar .state-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 13px;
+      margin-bottom: 12px;
+      transition: background-color 0.3s, color 0.3s;
+    }
+    #sidebar .state-badge.on  { background: var(--on); color: #1a1a2e; }
+    #sidebar .state-badge.off { background: var(--off); color: #fff; }
+    #sidebar .state-badge.unavailable { background: var(--unavailable); color: #fff; }
+    #sidebar .attr-list { font-size: 13px; color: var(--text-dim); }
+    #sidebar .attr-list dt { margin-top: 8px; }
+    #sidebar .links-section { margin-top: 16px; }
+    #sidebar .links-section h3 { font-size: 14px; margin-bottom: 8px; color: var(--text-dim); }
+    #sidebar .links-section ul { margin: 0; padding-left: 20px; }
+    #sidebar .sidebar-controls { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+    #sidebar .sidebar-controls button {
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--accent);
+      background: var(--accent);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 13px;
+    }
+    #sidebar .sidebar-controls button:hover { background: #1a3a5c; border-color: var(--text-dim); }
+    #sidebar .sidebar-controls button.primary { background: var(--on); color: var(--bg); border-color: var(--on); }
+    #sidebar .sidebar-controls button.primary:hover { opacity: 0.9; }
+    #sidebar .entity-block {
+      margin-top: 12px;
+      padding: 10px;
+      background: var(--accent);
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    #sidebar .entity-block .entity-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
+    #sidebar .entity-block .entity-attr { margin-top: 6px; color: var(--text-dim); font-size: 12px; }
+    #sidebar-close {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 20px;
+      padding: 4px;
+    }
+    #sidebar-close:hover { color: var(--text); }
+    /* Auth panel */
+    #auth-panel {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    #auth-panel.hidden { display: none; }
+    #auth-panel .card {
+      background: var(--surface);
+      padding: 24px;
+      border-radius: 12px;
+      max-width: 400px;
+      width: 100%;
+      border: 1px solid var(--accent);
+    }
+    #auth-panel label { display: block; margin-bottom: 8px; font-size: 13px; color: var(--text-dim); }
+    #auth-panel input {
+      width: 100%;
+      padding: 10px;
+      background: var(--accent);
+      border: 1px solid transparent;
+      border-radius: 6px;
+      color: var(--text);
+      margin-bottom: 16px;
+    }
+    #auth-panel input:focus { outline: none; border-color: var(--on); }
+    #auth-panel button {
+      width: 100%;
+      padding: 10px;
+      background: var(--on);
+      color: var(--bg);
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    #auth-panel button:hover { opacity: 0.9; }
+    #auth-panel .hint { font-size: 12px; color: var(--text-dim); margin-top: 12px; }
+    /* Status */
+    #status {
+      padding: 4px 12px;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+    .status-ok { color: var(--on); }
+    .status-err { color: var(--unavailable); }
+    #progress-bar {
+      height: 4px;
+      background: var(--accent);
+      width: 100%;
+      margin-top: 4px;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    #progress-bar .fill {
+      height: 100%;
+      background: var(--on);
+      border-radius: 2px;
+      transition: width 0.25s ease;
+      width: 0%;
+    }
+    #progress-text {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="auth-panel">
+      <div class="card">
+        <h2 style="margin-top:0;">HA Graph Explorer v2</h2>
+        <p style="color: var(--text-dim); font-size: 14px;">Collez votre token d'accès long durée Home Assistant.</p>
+        <label for="base-url-input">URL de base (optionnel)</label>
+        <input type="text" id="base-url-input" placeholder="https://homeassistant.local:8123" autocomplete="off">
+        <p class="hint" style="margin-top:0;">Laissez vide pour utiliser l’URL actuelle (ex. si ouvert depuis HA).</p>
+        <label for="token-input">Token d'accès</label>
+        <input type="password" id="token-input" placeholder="eyJhbGc..." autocomplete="off">
+        <button type="button" id="auth-save">Enregistrer et se connecter</button>
+        <p class="hint">Profil HA → Token d'accès → Créer un token. Le token est stocké localement dans ce navigateur.</p>
+      </div>
+    </div>
+    <div id="toolbar">
+      <input type="text" id="search" placeholder="Rechercher (entity_id ou nom)...">
+      <button type="button" id="btn-reset-layout" title="Réappliquer le layout force-directed">Réinitialiser layout</button>
+      <button type="button" id="btn-center" title="Centrer la vue sur l’ensemble des nœuds">Centrer</button>
+      <label><input type="checkbox" id="orphans"> Afficher orphelins</label>
+      <span id="domain-filters"></span>
+      <span style="margin-left:auto; display:flex; flex-direction:column; align-items:flex-end;">
+        <span id="status">Déconnecté</span>
+        <div id="progress-bar" style="display:none; width:160px;"><div class="fill"></div></div>
+        <span id="progress-text"></span>
+      </span>
+    </div>
+    <div id="graph-container">
+      <div id="grid-3d"></div>
+      <div id="cy"></div>
+    </div>
+    <aside id="sidebar">
+      <button type="button" id="sidebar-close" aria-label="Fermer">&times;</button>
+      <div id="sidebar-content"></div>
+    </aside>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+  <script src="https://unpkg.com/webcola/WebCola/cola.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape-cola@2.4.0/cytoscape-cola.min.js"></script>
+  <script>
+(function () {
+  'use strict';
+
+  // Sources de données (le backend HA lit les .storage et expose via WebSocket) :
+  // .storage/core.device_registry  → config/device_registry/list
+  // .storage/core.entity_registry   → config/entity_registry/list
+  // .storage/automations (ou YAML)  → automation/config { entity_id } par automation
+  // .storage/scripts (ou YAML)     → script/config { entity_id } par script (si exposé)
+  // .storage/scenes (ou YAML)      → get_states (entités scene.*) + attributs entity_id/entities
+  // On n'a pas accès direct aux fichiers .storage ; on utilise ces API.
+
+  const STORAGE_TOKEN = 'ha_graph_token';
+  const STORAGE_LAYOUT = 'ha_graph_layout';
+  const STORAGE_BASE = 'ha_graph_base';
+
+  const VIRTUAL_DOMAINS = new Set(['automation', 'script', 'scene', 'group', 'zone']);
+  const DOMAINS = [
+    { id: 'device', label: 'Appareils', icon: 'fa-microchip' },
+    { id: 'automation', label: 'Automations', icon: 'fa-robot' },
+    { id: 'script', label: 'Scripts', icon: 'fa-code' },
+    { id: 'scene', label: 'Scènes', icon: 'fa-palette' },
+    { id: 'group', label: 'Groupes', icon: 'fa-layer-group' },
+    { id: 'zone', label: 'Zones', icon: 'fa-map-marker-alt' }
+  ];
+
+  const DOMAIN_ICONS = Object.fromEntries(DOMAINS.map(d => [d.id, d.icon]));
+  const DOMAIN_EMOJI = {
+    device: '📟',
+    automation: '🤖',
+    script: '📜',
+    scene: '🎨',
+    group: '👥',
+    zone: '📍'
+  };
+  const EDGE_COLORS = { trigger: '#ff9a8b', action: '#ffecd2', member: '#a8e6cf', target: '#d4a5a5' };
+
+  let cy = null;
+  let ws = null;
+  let wsReconnectTimer = null;
+  let wsMessageId = 0;
+  let states = {};
+  let graphData = { nodes: [], edges: [] };
+  let baseUrl = '';
+  let deviceRegistry = [];
+  let entityToDevice = {};
+  let deviceToEntities = {};
+
+  function getToken() {
+    return localStorage.getItem(STORAGE_TOKEN) || '';
+  }
+  function setToken(token) {
+    if (token) localStorage.setItem(STORAGE_TOKEN, token);
+    else localStorage.removeItem(STORAGE_TOKEN);
+  }
+  function getBaseUrl() {
+    const stored = localStorage.getItem(STORAGE_BASE);
+    if (stored) return stored;
+    const u = new URL(window.location.href);
+    return u.origin;
+  }
+  function setBaseUrl(url) {
+    localStorage.setItem(STORAGE_BASE, url);
+  }
+
+  function showAuth(show) {
+    document.getElementById('auth-panel').classList.toggle('hidden', !show);
+  }
+  function setStatus(text, ok) {
+    const el = document.getElementById('status');
+    el.textContent = text;
+    el.className = ok ? 'status-ok' : 'status-err';
+  }
+
+  function setProgress(show, percent, text) {
+    const bar = document.getElementById('progress-bar');
+    const fill = bar && bar.querySelector('.fill');
+    const txt = document.getElementById('progress-text');
+    if (bar) bar.style.display = show ? 'block' : 'none';
+    if (fill) fill.style.width = (percent || 0) + '%';
+    if (txt) txt.textContent = text || '';
+  }
+
+  function wsConnect() {
+    baseUrl = getBaseUrl();
+    const token = getToken();
+    if (!token) {
+      showAuth(true);
+      return;
+    }
+    const wsUrl = (baseUrl.replace(/^http/, 'ws') + '/api/websocket').replace('//api', '/api');
+    ws = new WebSocket(wsUrl);
+    ws.onopen = () => {
+      setStatus('WebSocket ouvert', true);
+    };
+    ws.onmessage = (ev) => {
+      const msg = JSON.parse(ev.data);
+      if (msg.type === 'auth_required') {
+        ws.send(JSON.stringify({ type: 'auth', access_token: token }));
+        return;
+      }
+      if (msg.type === 'auth_ok') {
+        setStatus('Connecté', true);
+        loadData();
+        subscribeStateChanged();
+        return;
+      }
+      if (msg.type === 'auth_invalid') {
+        setStatus('Token invalide', false);
+        showAuth(true);
+        return;
+      }
+      if (msg.type === 'result') {
+        const pending = window.__haWsPending && window.__haWsPending[msg.id];
+        if (pending) {
+          clearTimeout(pending.timer);
+          delete window.__haWsPending[msg.id];
+          if (msg.success !== false) pending.resolve(msg.result);
+          else pending.reject(new Error(msg.error?.message || msg.error?.code || 'Erreur WS'));
+        }
+        return;
+      }
+      if (msg.type === 'event' && msg.event?.event_type === 'state_changed') {
+        const d = msg.event.data;
+        if (d.entity_id && d.new_state) {
+          states[d.entity_id] = d.new_state;
+          updateNodeState(d.entity_id, d.new_state);
+        }
+      }
+    };
+    ws.onclose = () => {
+      setStatus('Déconnecté', false);
+      wsReconnectTimer = setTimeout(wsConnect, 3000);
+    };
+    ws.onerror = () => {};
+  }
+
+  function wsSend(type, extra = {}) {
+    return new Promise((resolve, reject) => {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        reject(new Error('WebSocket non connecté'));
+        return;
+      }
+      const id = ++wsMessageId;
+      if (!window.__haWsPending) window.__haWsPending = {};
+      const timer = setTimeout(() => {
+        if (window.__haWsPending && window.__haWsPending[id]) {
+          delete window.__haWsPending[id];
+          reject(new Error('Timeout'));
+        }
+      }, 20000);
+      window.__haWsPending[id] = { resolve, reject, timer };
+      ws.send(JSON.stringify({ id, type, ...extra }));
+    });
+  }
+
+  function callService(domain, service, serviceData = {}) {
+    return wsSend('call_service', {
+      domain,
+      service,
+      service_data: serviceData
+    });
+  }
+
+  function loadData() {
+    setStatus('Chargement...', true);
+    setProgress(true, 5, 'Récupération entités et registres...');
+    Promise.all([
+      wsSend('get_states'),
+      wsSend('config/device_registry/list').catch(() => []),
+      wsSend('config/entity_registry/list').catch(() => [])
+    ]).then(([statesResult, devices, entitiesRaw]) => {
+      const list = statesResult || [];
+      const rawDevices = devices || [];
+      deviceRegistry = Array.isArray(rawDevices) ? rawDevices : (rawDevices.devices || []);
+      const entities = Array.isArray(entitiesRaw) ? entitiesRaw : (entitiesRaw && entitiesRaw.length !== undefined ? entitiesRaw : []);
+      setProgress(true, 15, 'Entités : ' + list.length + ' | Appareils : ' + deviceRegistry.length);
+      states = list.reduce((acc, s) => {
+        acc[s.entity_id] = s;
+        return acc;
+      }, {});
+      entityToDevice = {};
+      deviceToEntities = {};
+      entities.forEach(ent => {
+        const eid = ent.entity_id;
+        const did = ent.device_id;
+        if (eid && did) {
+          entityToDevice[eid] = did;
+          if (!deviceToEntities[did]) deviceToEntities[did] = [];
+          deviceToEntities[did].push(eid);
+        }
+      });
+      Object.keys(states).forEach(eid => {
+        const did = entityToDevice[eid];
+        if (did && (!deviceToEntities[did] || !deviceToEntities[did].includes(eid))) {
+          if (!deviceToEntities[did]) deviceToEntities[did] = [];
+          deviceToEntities[did].push(eid);
+        }
+      });
+      setProgress(true, 25, 'Construction graphe (appareils)...');
+      return buildGraphFromDevices();
+    }).then(() => {
+      setProgress(true, 85, 'Rendu (' + graphData.nodes.length + ' nœuds, ' + graphData.edges.length + ' liens)...');
+      renderGraph();
+      loadLayoutFromStorage();
+      setProgress(false);
+      setStatus('Connecté (' + graphData.nodes.length + ' nœuds)', true);
+    }).catch(err => {
+      setProgress(false);
+      setStatus('Erreur: ' + (err.message || err), false);
+    });
+  }
+
+  function entityDomain(entityId) {
+    const i = entityId.indexOf('.');
+    return i > 0 ? entityId.slice(0, i) : '';
+  }
+
+  function getEntityIdsFromAttributes(attrs) {
+    if (!attrs) return [];
+    let list = attrs.entity_id || attrs.entities || attrs.members;
+    if (typeof list === 'string') list = [list];
+    if (!Array.isArray(list)) return [];
+    return list.filter(id => typeof id === 'string' && id.includes('.'));
+  }
+
+  function parseAutomationScriptConfig(config) {
+    const entityIds = new Set();
+    const deviceIds = new Set();
+    if (!config) return { entityIds, deviceIds };
+    const addEntity = (v) => {
+      if (typeof v === 'string' && v.includes('.')) entityIds.add(v);
+      if (Array.isArray(v)) v.forEach(addEntity);
+    };
+    const addDevice = (v) => {
+      if (typeof v === 'string' && v.length > 10) deviceIds.add(v);
+      if (Array.isArray(v)) v.forEach(addDevice);
+    };
+    const walk = (obj) => {
+      if (!obj || typeof obj !== 'object') return;
+      if (obj.entity_id) addEntity(obj.entity_id);
+      if (obj.entity) addEntity(obj.entity);
+      if (obj.entities) addEntity(obj.entities);
+      if (obj.device_id) addDevice(obj.device_id);
+      if (obj.data?.entity_id) addEntity(obj.data.entity_id);
+      if (obj.data?.device_id) addDevice(obj.data.device_id);
+      if (obj.service_data?.entity_id) addEntity(obj.service_data.entity_id);
+      if (obj.service_data?.device_id) addDevice(obj.service_data.device_id);
+      if (obj.target?.entity_id) addEntity(obj.target.entity_id);
+      if (obj.target?.device_id) addDevice(obj.target.device_id);
+      if (obj.event_data?.entity_id) addEntity(obj.event_data.entity_id);
+      if (obj.data?.entity_id) addEntity(obj.data.entity_id);
+      if (obj.data?.device_id) addDevice(obj.data.device_id);
+      if (obj.trigger) (Array.isArray(obj.trigger) ? obj.trigger : [obj.trigger]).forEach(walk);
+      if (obj.triggers) (Array.isArray(obj.triggers) ? obj.triggers : [obj.triggers]).forEach(walk);
+      if (obj.action) (Array.isArray(obj.action) ? obj.action : [obj.action]).forEach(walk);
+      if (obj.actions) (Array.isArray(obj.actions) ? obj.actions : [obj.actions]).forEach(walk);
+      if (obj.condition) (Array.isArray(obj.condition) ? obj.condition : [obj.condition]).forEach(walk);
+      if (obj.conditions) (Array.isArray(obj.conditions) ? obj.conditions : [obj.conditions]).forEach(walk);
+      if (obj.sequence) (Array.isArray(obj.sequence) ? obj.sequence : [obj.sequence]).forEach(walk);
+      if (obj.repeat) walk(obj.repeat);
+      if (obj.choose) {
+        const choose = Array.isArray(obj.choose) ? obj.choose : [obj.choose];
+        choose.forEach(branch => {
+          if (branch && typeof branch === 'object') {
+            if (Array.isArray(branch.conditions)) branch.conditions.forEach(walk);
+            if (branch.sequence) (Array.isArray(branch.sequence) ? branch.sequence : [branch.sequence]).forEach(walk);
+          }
+        });
+      }
+      if (obj.default) walk(obj.default);
+      if (obj.if) (Array.isArray(obj.if) ? obj.if : [obj.if]).forEach(walk);
+      if (obj.then) (Array.isArray(obj.then) ? obj.then : [obj.then]).forEach(walk);
+      if (obj.else) (Array.isArray(obj.else) ? obj.else : [obj.else]).forEach(walk);
+      if (obj.wait_for_trigger) (Array.isArray(obj.wait_for_trigger) ? obj.wait_for_trigger : [obj.wait_for_trigger]).forEach(walk);
+      if (Array.isArray(obj)) obj.forEach(walk);
+      else Object.values(obj).forEach(walk);
+    };
+    walk(config);
+    return { entityIds, deviceIds };
+  }
+
+  function entityToNodeId(entityOrDeviceId) {
+    if (!entityOrDeviceId || typeof entityOrDeviceId !== 'string') return null;
+    if (!entityOrDeviceId.includes('.')) return entityOrDeviceId;
+    const domain = entityDomain(entityOrDeviceId);
+    if (VIRTUAL_DOMAINS.has(domain)) return entityOrDeviceId;
+    return entityToDevice[entityOrDeviceId] || entityOrDeviceId;
+  }
+
+  function deviceAggregatedState(deviceId) {
+    const eids = deviceToEntities[deviceId];
+    if (!eids || !eids.length) return 'off';
+    let hasOn = false, hasUnavail = false;
+    eids.forEach(eid => {
+      const s = states[eid];
+      if (!s) return;
+      if (s.state === 'unavailable') hasUnavail = true;
+      else if (s.state === 'on') hasOn = true;
+    });
+    if (hasUnavail && !hasOn && eids.every(eid => (states[eid] || {}).state === 'unavailable')) return 'unavailable';
+    return hasOn ? 'on' : 'off';
+  }
+
+  function buildGraphFromDevices() {
+    const nodeIds = new Set();
+    const nodes = [];
+    const entityEdges = [];
+
+    setProgress(true, 30, 'Nœuds appareils...');
+    deviceRegistry.forEach((dev, i) => {
+      if (i % 100 === 0 && deviceRegistry.length > 100) setProgress(true, 30 + (i / deviceRegistry.length) * 20, 'Appareils : ' + (i + 1) + '/' + deviceRegistry.length);
+      const id = dev.id;
+      const name = dev.name_by_user || dev.name || 'Sans nom';
+      const state = deviceAggregatedState(id);
+      nodeIds.add(id);
+      nodes.push({
+        id,
+        domain: 'device',
+        label: name,
+        icon: '📟',
+        state,
+        attributes: { device_id: id },
+        entityIds: deviceToEntities[id] || []
+      });
+    });
+
+    setProgress(true, 52, 'Nœuds automations / scripts / groupes...');
+    Object.keys(states).forEach(entityId => {
+      const domain = entityDomain(entityId);
+      if (!VIRTUAL_DOMAINS.has(domain)) return;
+      const s = states[entityId];
+      const name = (s.attributes && s.attributes.friendly_name) || entityId;
+      nodeIds.add(entityId);
+      nodes.push({
+        id: entityId,
+        domain,
+        label: name,
+        icon: DOMAIN_EMOJI[domain] || '⬤',
+        state: s.state,
+        attributes: s.attributes || {},
+        entityIds: [entityId]
+      });
+    });
+
+    setProgress(true, 58, 'Liens (groupes / scènes)...');
+    Object.values(states).forEach(s => {
+      const domain = entityDomain(s.entity_id);
+      const attrs = s.attributes || {};
+      if (domain === 'group' || domain === 'zone') {
+        getEntityIdsFromAttributes(attrs).forEach(tid => {
+          entityEdges.push({ source: s.entity_id, target: tid, type: 'member' });
+        });
+      }
+      if (domain === 'scene') {
+        getEntityIdsFromAttributes(attrs).forEach(tid => {
+          entityEdges.push({ source: s.entity_id, target: tid, type: 'target' });
+        });
+      }
+    });
+
+    setProgress(true, 62, 'Recherche automations / scripts...');
+    return tryFetchAutomationScriptEdges(entityEdges, new Set(Object.keys(states))).then(() => {
+      entityEdges.forEach(({ target: tgtE }) => {
+        const tgtN = entityToNodeId(tgtE);
+        if (tgtN && !nodeIds.has(tgtN) && states[tgtN]) {
+          nodeIds.add(tgtN);
+          const s = states[tgtN];
+          const domain = entityDomain(tgtN);
+          nodes.push({
+            id: tgtN,
+            domain,
+            label: (s.attributes && s.attributes.friendly_name) || tgtN,
+            icon: DOMAIN_EMOJI[domain] || '⬤',
+            state: s.state,
+            attributes: s.attributes || {},
+            entityIds: [tgtN]
+          });
+        }
+      });
+      const edgeKeys = new Set();
+      const edges = [];
+      entityEdges.forEach(({ source: srcE, target: tgtE, type }) => {
+        const srcN = entityToNodeId(srcE);
+        const tgtN = entityToNodeId(tgtE);
+        if (srcN && tgtN && srcN !== tgtN && nodeIds.has(srcN) && nodeIds.has(tgtN)) {
+          const key = srcN + '|' + tgtN + '|' + type;
+          if (!edgeKeys.has(key)) {
+            edgeKeys.add(key);
+            edges.push({ source: srcN, target: tgtN, type });
+          }
+        }
+      });
+      graphData = { nodes, edges };
+    });
+  }
+
+  function tryFetchAutomationScriptEdges(edges, knownIds) {
+    const automationEntityIds = Object.keys(states).filter(k => k.startsWith('automation.'));
+    const scriptEntityIds = Object.keys(states).filter(k => k.startsWith('script.'));
+
+    function addEdgesFromConfig(sourceEid, config, edgeType) {
+      if (!config || typeof config !== 'object') return;
+      const { entityIds: ids, deviceIds: dids } = parseAutomationScriptConfig(config);
+      ids.forEach(tid => {
+        if (knownIds.has(tid)) edges.push({ source: sourceEid, target: tid, type: edgeType });
+      });
+      dids.forEach(did => {
+        edges.push({ source: sourceEid, target: did, type: edgeType });
+      });
+    }
+
+    function runInBatches(arr, batchSize, fn) {
+      let p = Promise.resolve();
+      for (let i = 0; i < arr.length; i += batchSize) {
+        const batch = arr.slice(i, i + batchSize);
+        p = p.then(() => Promise.all(batch.map(fn)));
+      }
+      return p;
+    }
+
+    const p1 = runInBatches(automationEntityIds, 5, (entityId) =>
+      wsSend('automation/config', { entity_id: entityId })
+        .then(result => {
+          const config = result && (result.config !== undefined ? result.config : result);
+          addEdgesFromConfig(entityId, config, 'trigger');
+        })
+        .catch(() => {})
+    );
+    const p2 = runInBatches(scriptEntityIds, 5, (entityId) =>
+      wsSend('script/config', { entity_id: entityId })
+        .then(result => {
+          const config = result && (result.config !== undefined ? result.config : result);
+          addEdgesFromConfig(entityId, config, 'action');
+        })
+        .catch(() => {})
+    );
+    return Promise.all([p1, p2]);
+  }
+
+  function nodeColor(state) {
+    if (state === 'unavailable') return '#e94560';
+    if (state === 'on') return '#a8e6cf';
+    return '#6c757d';
+  }
+
+  function renderGraph() {
+    const container = document.getElementById('cy');
+    if (cy) cy.destroy();
+
+    const elements = [
+      ...graphData.nodes.map(n => ({
+        data: {
+          id: n.id,
+          label: n.label,
+          domain: n.domain,
+          state: n.state,
+          icon: n.icon || DOMAIN_EMOJI[n.domain] || '⬤',
+          faIcon: DOMAIN_ICONS[n.domain] || 'fa-circle'
+        },
+        classes: n.state === 'unavailable' ? 'unavailable' : (n.state === 'on' ? 'on' : 'off')
+      })),
+      ...graphData.edges.map((e, i) => ({
+        data: {
+          id: 'e' + i,
+          source: e.source,
+          target: e.target,
+          type: e.type || 'member'
+        }
+      }))
+    ];
+
+    cy = cytoscape({
+      container,
+      elements,
+      style: [
+        {
+          selector: 'node',
+          style: {
+            'label': (ele) => {
+              const icon = ele.data('icon') || '⬤';
+              const name = ele.data('label') || '';
+              return name ? icon + '\n' + name : icon;
+            },
+            'text-valign': 'bottom',
+            'text-halign': 'center',
+            'font-size': '10px',
+            'color': '#e8e8e8',
+            'text-margin-y': 8,
+            'width': 52,
+            'height': 52,
+            'background-color': '#6c757d',
+            'border-width': 2,
+            'border-color': '#16213e',
+            'transition-duration': '0.3s',
+            'transition-property': 'background-color, border-color',
+            'text-wrap': 'wrap',
+            'text-max-width': '160px',
+            'overlay-color': 'rgba(0,0,0,0.25)',
+            'overlay-padding': 2,
+            'overlay-opacity': 0
+          }
+        },
+        { selector: 'node[domain="script"]', style: { 'shape': 'rectangle' } },
+        { selector: 'node[domain="automation"]', style: { 'shape': 'diamond' } },
+        { selector: 'node[domain="scene"]', style: { 'shape': 'triangle' } },
+        { selector: 'node:selected', style: { 'overlay-opacity': 0.5 } },
+        { selector: 'node.highlight', style: { 'overlay-opacity': 0.3 } },
+        { selector: 'node.on', style: { 'background-color': '#a8e6cf', 'border-color': '#7bc99a' } },
+        { selector: 'node.off', style: { 'background-color': '#6c757d', 'border-color': '#5a6268' } },
+        { selector: 'node.unavailable', style: { 'background-color': '#e94560', 'border-color': '#c73e54' } },
+        { selector: 'node.highlight', style: { 'border-width': 4, 'border-color': '#ffecd2' } },
+        { selector: 'node.dim', style: { 'opacity': 0.25 } },
+        { selector: 'node.hidden', style: { 'display': 'none' } },
+        { selector: 'node.orphan', style: { 'border-width': 4, 'border-color': '#ff9a8b' } },
+        { selector: 'edge.hidden', style: { 'display': 'none' } },
+        {
+          selector: 'edge',
+          style: {
+            'width': 1.5,
+            'line-color': '#a8e6cf',
+            'target-arrow-color': '#a8e6cf',
+            'target-arrow-shape': 'triangle',
+            'curve-style': 'bezier',
+            'transition-duration': '0.3s',
+            'opacity': 0.55
+          }
+        },
+        { selector: 'edge[type="trigger"]', style: { 'line-color': '#ff9a8b', 'target-arrow-color': '#ff9a8b' } },
+        { selector: 'edge[type="action"]', style: { 'line-color': '#ffecd2', 'target-arrow-color': '#ffecd2' } },
+        { selector: 'edge[type="member"]', style: { 'line-color': '#a8e6cf', 'target-arrow-color': '#a8e6cf' } },
+        { selector: 'edge[type="target"]', style: { 'line-color': '#d4a5a5', 'target-arrow-color': '#d4a5a5' } },
+        { selector: 'edge.highlight', style: { 'width': 4 } },
+        { selector: 'edge.dim', style: { 'opacity': 0.2 } }
+      ],
+      layout: { name: 'preset' },
+      minZoom: 0.05,
+      maxZoom: 5,
+      wheelSensitivity: 0.3
+    });
+
+    cy.on('tap', 'node', evt => {
+      const node = evt.target;
+      openSidebar(node.data('id'));
+    });
+    cy.on('mouseover', 'node', evt => {
+      const node = evt.target;
+      const neighborhood = node.neighborhood();
+      cy.elements().addClass('dim');
+      neighborhood.removeClass('dim').addClass('highlight');
+    });
+    cy.on('mouseout', 'node', () => {
+      cy.elements().removeClass('dim highlight');
+    });
+    cy.on('drag', 'node', () => saveLayoutToStorage());
+
+    document.getElementById('btn-reset-layout').onclick = () => applyColaLayout();
+    document.getElementById('btn-center').onclick = () => {
+      if (cy && cy.nodes().length > 0) cy.fit(50);
+    };
+    document.getElementById('sidebar-close').onclick = () => closeSidebar();
+    document.getElementById('search').oninput = onSearchInput;
+    document.getElementById('orphans').onchange = toggleOrphans;
+    document.getElementById('sidebar-content').addEventListener('click', (e) => {
+      const btn = e.target.closest('button.ha-control');
+      if (!btn) return;
+      const entityId = btn.dataset.entityId;
+      const domain = btn.dataset.domain;
+      const service = btn.dataset.service;
+      if (!entityId || !domain || !service) return;
+      btn.disabled = true;
+      callService(domain, service, { entity_id: entityId })
+        .then(() => { setTimeout(() => { if (currentSidebarNodeId) openSidebar(currentSidebarNodeId); }, 400); })
+        .catch(() => {})
+        .finally(() => { btn.disabled = false; });
+    });
+    buildDomainFilters();
+  }
+
+  function buildDomainFilters() {
+    const container = document.getElementById('domain-filters');
+    container.innerHTML = DOMAINS.map(d => `
+      <label title="${d.label}">
+        <input type="checkbox" class="domain-filter" data-domain="${d.id}" checked> <i class="fa ${d.icon}"></i>
+      </label>
+    `).join('');
+    container.querySelectorAll('.domain-filter').forEach(cb => {
+      cb.addEventListener('change', () => filterByDomains());
+    });
+  }
+
+  function filterByDomains() {
+    const checked = new Set(
+      Array.from(document.querySelectorAll('.domain-filter:checked')).map(c => c.dataset.domain)
+    );
+    if (!cy) return;
+    cy.nodes().forEach(n => {
+      const domain = n.data('domain');
+      n.toggleClass('hidden', !checked.has(domain));
+    });
+    cy.edges().forEach(e => {
+      const src = e.source().hasClass('hidden');
+      const tgt = e.target().hasClass('hidden');
+      e.toggleClass('hidden', src || tgt);
+    });
+  }
+
+  function toggleOrphans() {
+    const show = document.getElementById('orphans').checked;
+    if (!cy) return;
+    const withEdges = new Set();
+    cy.edges().forEach(ed => {
+      withEdges.add(ed.source().id());
+      withEdges.add(ed.target().id());
+    });
+    cy.nodes().forEach(n => {
+      n.toggleClass('orphan', show && !withEdges.has(n.id()));
+    });
+  }
+
+  function onSearchInput() {
+    const q = document.getElementById('search').value.trim().toLowerCase();
+    if (!cy || !q) {
+      cy?.elements().removeClass('dim highlight');
+      return;
+    }
+    const match = n => {
+      const id = (n.data('id') || '').toLowerCase();
+      const label = (n.data('label') || '').toLowerCase();
+      return id.includes(q) || label.includes(q);
+    };
+    cy.elements().addClass('dim');
+    cy.nodes().filter(match).removeClass('dim').addClass('highlight');
+    cy.nodes().filter(match).connectedEdges().removeClass('dim');
+    const first = cy.nodes().filter(match).first();
+    if (first.length) {
+      cy.animate({ center: { eles: first }, zoom: 1.5 }, { duration: 300 });
+    }
+  }
+
+  let currentSidebarNodeId = null;
+
+  function getEntityDomain(entityId) {
+    const i = (entityId || '').indexOf('.');
+    return i > 0 ? entityId.slice(0, i) : '';
+  }
+
+  function entityControlButtons(entityId) {
+    const domain = getEntityDomain(entityId);
+    const s = states[entityId];
+    const st = s ? s.state : '';
+    if (st === 'unavailable') return '';
+    const e = (d, svc, label, primary) => `<button type="button" class="ha-control ${primary ? 'primary' : ''}" data-entity-id="${escapeHtml(entityId)}" data-domain="${escapeHtml(d)}" data-service="${escapeHtml(svc)}">${escapeHtml(label)}</button>`;
+    if (domain === 'script') return `<div class="sidebar-controls">${e('script', 'turn_on', 'Exécuter', true)}</div>`;
+    if (domain === 'automation') {
+      return `<div class="sidebar-controls">${e('automation', 'trigger', 'Déclencher', true)} ${e('automation', 'turn_on', 'Activer', false)} ${e('automation', 'turn_off', 'Désactiver', false)}</div>`;
+    }
+    if (domain === 'scene') return `<div class="sidebar-controls">${e('scene', 'turn_on', 'Activer', true)}</div>`;
+    if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'input_boolean') {
+      return `<div class="sidebar-controls">${e(domain, 'turn_on', 'On')} ${e(domain, 'turn_off', 'Off')}</div>`;
+    }
+    if (domain === 'cover') {
+      return `<div class="sidebar-controls">${e('cover', 'open_cover', 'Ouvrir')} ${e('cover', 'close_cover', 'Fermer')} ${e('cover', 'stop_cover', 'Stop')}</div>`;
+    }
+    if (domain === 'lock') {
+      return `<div class="sidebar-controls">${e('lock', 'lock', 'Verrouiller')} ${e('lock', 'unlock', 'Déverrouiller')}</div>`;
+    }
+    return '';
+  }
+
+  function entityAttributesHtml(s) {
+    if (!s) return '';
+    const attrs = s.attributes || {};
+    const show = ['unit_of_measurement', 'current_temperature', 'temperature', 'humidity', 'battery_level', 'brightness', 'current', 'voltage', 'power', 'device_class'];
+    const lines = [];
+    if (s.state !== undefined && s.state !== null) {
+      const u = attrs.unit_of_measurement ? ` ${attrs.unit_of_measurement}` : '';
+      lines.push(`État: ${s.state}${u}`);
+    }
+    show.forEach(k => { if (k !== 'unit_of_measurement' && attrs[k] !== undefined) lines.push(`${k}: ${attrs[k]}`); });
+    return lines.length ? `<div class="entity-attr">${lines.map(l => escapeHtml(l)).join(' · ')}</div>` : '';
+  }
+
+  function openSidebar(nodeId) {
+    currentSidebarNodeId = nodeId;
+    const content = document.getElementById('sidebar-content');
+    const links = graphData.edges.filter(e => e.source === nodeId || e.target === nodeId);
+    const out = links.filter(e => e.source === nodeId);
+    const inc = links.filter(e => e.target === nodeId);
+    const node = graphData.nodes.find(n => n.id === nodeId);
+    const linkLabel = (id) => (graphData.nodes.find(n => n.id === id) || {}).label || id;
+    const linksHtml = `
+      <div class="links-section">
+        <h3>Liens (${links.length})</h3>
+        <ul>
+          ${out.map(e => `<li>→ ${escapeHtml(linkLabel(e.target))} (${e.type})</li>`).join('')}
+          ${inc.map(e => `<li>← ${escapeHtml(linkLabel(e.source))} (${e.type})</li>`).join('')}
+        </ul>
+      </div>`;
+
+    if (!node) {
+      content.innerHTML = '<p>Nœud inconnu</p>';
+      document.getElementById('sidebar').classList.add('open');
+      return;
+    }
+
+    if (node.domain === 'device') {
+      const entityIds = node.entityIds || [];
+      const entityBlocks = entityIds.map(eid => {
+        const s = states[eid];
+        const name = (s && s.attributes && s.attributes.friendly_name) || eid;
+        const st = s ? s.state : '?';
+        const badgeClass = st === 'unavailable' ? 'unavailable' : (st === 'on' ? 'on' : 'off');
+        const attrs = entityAttributesHtml(s);
+        const ctrl = entityControlButtons(eid);
+        return `<div class="entity-block">
+          <div class="entity-head">
+            <span><span class="state-badge ${badgeClass}" style="font-size:10px;">${escapeHtml(st)}</span> ${escapeHtml(name)}</span>
+          </div>
+          <code style="font-size:10px;color:var(--text-dim);">${escapeHtml(eid)}</code>
+          ${attrs}
+          ${ctrl}
+        </div>`;
+      }).join('');
+      content.innerHTML = `
+        <h2>${escapeHtml(node.label)}</h2>
+        <div class="state-badge ${node.state === 'unavailable' ? 'unavailable' : (node.state === 'on' ? 'on' : 'off')}">${escapeHtml(node.state)}</div>
+        <p style="font-size:12px;color:var(--text-dim);">Appareil · ${entityIds.length} entité(s)</p>
+        <div class="links-section"><h3>Contrôles & capteurs</h3></div>
+        ${entityBlocks || '<p style="font-size:13px;color:var(--text-dim);">Aucune entité</p>'}
+        ${linksHtml}
+      `;
+    } else {
+      const s = states[nodeId];
+      const name = node.label;
+      const st = s ? s.state : node.state;
+      const badgeClass = st === 'unavailable' ? 'unavailable' : (st === 'on' ? 'on' : 'off');
+      const attrs = entityAttributesHtml(s);
+      const ctrl = entityControlButtons(nodeId);
+      content.innerHTML = `
+        <h2>${escapeHtml(name)}</h2>
+        <div class="state-badge ${badgeClass}">${escapeHtml(st)}</div>
+        <p style="font-size:12px;color:var(--text-dim);">${escapeHtml(nodeId)}</p>
+        ${attrs}
+        ${ctrl}
+        ${linksHtml}
+      `;
+    }
+    document.getElementById('sidebar').classList.add('open');
+  }
+
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+  }
+
+  function escapeHtml(s) {
+    const div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  function updateNodeState(entityId, newState) {
+    if (!cy) return;
+    const nodeId = entityToNodeId(entityId);
+    if (!nodeId) return;
+    const node = cy.getElementById(nodeId);
+    if (node.length) {
+      const state = nodeId === entityId ? newState.state : deviceAggregatedState(nodeId);
+      node.data('state', state);
+      node.removeClass('on off unavailable').addClass(
+        state === 'unavailable' ? 'unavailable' : (state === 'on' ? 'on' : 'off')
+      );
+    }
+  }
+
+  function subscribeStateChanged() {
+    wsSend('subscribe_events', { event_type: 'state_changed' }).catch(() => {});
+  }
+
+  function getStoredLayout() {
+    try {
+      const raw = localStorage.getItem(STORAGE_LAYOUT);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+
+  function saveLayoutToStorage() {
+    if (!cy) return;
+    const pos = {};
+    cy.nodes().forEach(n => {
+      const p = n.position();
+      pos[n.id()] = { x: p.x, y: p.y };
+    });
+    localStorage.setItem(STORAGE_LAYOUT, JSON.stringify(pos));
+  }
+
+  function loadLayoutFromStorage() {
+    const pos = getStoredLayout();
+    if (pos && cy) {
+      cy.nodes().forEach(n => {
+        const p = pos[n.id()];
+        if (p) n.position(p);
+      });
+      cy.fit(50);
+    } else {
+      applyColaLayout();
+    }
+  }
+
+  function applyColaLayout() {
+    if (!cy) return;
+    try {
+      cy.layout({
+        name: 'cola',
+        animate: true,
+        animationDuration: 400,
+        nodeSpacing: 60,
+        edgeLength: 120,
+        avoidOverlap: true,
+        handleDisconnected: true,
+        padding: 50,
+        nodeDimensionsIncludeLabels: true,
+        maxSimulationTime: 6000,
+        fit: true
+      }).run();
+      setTimeout(saveLayoutToStorage, 500);
+    } catch (e) {
+      cy.layout({
+        name: 'cose',
+        animate: true,
+        nodeRepulsion: 800000,
+        idealEdgeLength: 120,
+        edgeElasticity: 120,
+        nestingFactor: 1.2,
+        padding: 50,
+        fit: true
+      }).run();
+      setTimeout(saveLayoutToStorage, 500);
+    }
+  }
+
+  function initAuthPanel() {
+    const baseInput = document.getElementById('base-url-input');
+    const storedBase = localStorage.getItem(STORAGE_BASE);
+    if (storedBase) baseInput.value = storedBase;
+    if (getToken()) {
+      showAuth(false);
+      wsConnect();
+    } else {
+      showAuth(true);
+    }
+  }
+  document.getElementById('auth-save').onclick = () => {
+    const base = document.getElementById('base-url-input').value.trim();
+    const token = document.getElementById('token-input').value.trim();
+    if (base) setBaseUrl(base.replace(/\/$/, ''));
+    if (token) setToken(token);
+    document.getElementById('token-input').value = '';
+    showAuth(false);
+    if (ws) ws.close();
+    wsConnect();
+  };
+  initAuthPanel();
+})();
+  </script>
+</body>
+</html>
