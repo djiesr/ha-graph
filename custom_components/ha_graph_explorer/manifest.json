@@ -1,0 +1,11 @@
+{
+  "domain": "ha_graph_explorer",
+  "name": "HA Graph Explorer",
+  "documentation": "https://github.com/user/ha-visual3d",
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": [],
+  "iot_class": "local_push",
+  "requirements": [],
+  "version": "1.0.0"
+}

@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HA Graph Explorer v3</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Syne:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:       #0b0d12;
+      --surface:  #11141c;
+      --surface2: #181c27;
+      --border:   #1f2535;
+      --text:     #c8d0e0;
+      --text-dim: #4a5268;
+      --text-mid: #7d8aa8;
+      --radius:   8px;
+
+      /* Couche LOGIQUE — automations, scripts, scènes */
+      --logic-auto:   #f97316;  /* orange */
+      --logic-script: #a78bfa;  /* violet */
+      --logic-scene:  #f472b6;  /* rose */
+
+      /* Couche PHYSIQUE — devices */
+      --phys-on:   #60a5fa;  /* bleu */
+      --phys-off:  #2a3248;
+      --phys-unavail: #ef4444;
+
+      /* Couche MESURE — capteurs */
+      --meas-active: #34d399;  /* vert émeraude */
+      --meas-off:    #1e2535;
+
+      /* Groupes / zones */
+      --group-color: #38bdf8;
+
+      /* Arêtes */
+      --edge-trigger: #f97316;
+      --edge-action:  #a78bfa;
+      --edge-member:  #38bdf8;
+      --edge-target:  #f472b6;
+
+      --shadow: rgba(0,0,0,0.7);
+    }
+
+    * { box-sizing: border-box; margin:0; padding:0; }
+
+    body {
+      font-family: 'Syne', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+      height: 100vh;
+    }
+
+    #app { display:flex; flex-direction:column; height:100vh; }
+
+    /* ─────────── TOOLBAR ─────────── */
+    #toolbar {
+      display:flex; align-items:center; gap:6px;
+      padding:0 14px; height:50px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink:0; z-index:20; position:relative;
+    }
+    .tb-title {
+      font-size:12px; font-weight:700; letter-spacing:.1em;
+      color:#3d7fff; text-transform:uppercase; margin-right:6px; white-space:nowrap;
+    }
+    .tb-sep { width:1px; height:22px; background:var(--border); margin:0 4px; flex-shrink:0; }
+
+    /* search */
+    .search-wrap { position:relative; display:flex; align-items:center; }
+    .search-wrap svg { position:absolute; left:8px; opacity:.35; pointer-events:none; }
+    #search {
+      background:var(--surface2); border:1px solid var(--border);
+      color:var(--text); padding:5px 10px 5px 30px;
+      border-radius:var(--radius); width:170px;
+      font-size:12px; font-family:'JetBrains Mono',monospace;
+      transition:border-color .2s, box-shadow .2s;
+    }
+    #search::placeholder { color:var(--text-dim); }
+    #search:focus { outline:none; border-color:#3d7fff; box-shadow:0 0 0 2px rgba(61,127,255,.15); }
+
+    .tb-btn {
+      background:var(--surface2); border:1px solid var(--border);
+      color:var(--text-mid); padding:5px 10px;
+      border-radius:var(--radius); cursor:pointer;
+      font:600 10px/1 'Syne',sans-serif; letter-spacing:.05em;
+      text-transform:uppercase; transition:all .15s; white-space:nowrap;
+    }
+    .tb-btn:hover { background:var(--border); color:var(--text); }
+
+    /* domain pills */
+    #domain-filters { display:flex; gap:4px; align-items:center; }
+
+    .dpill {
+      display:flex; align-items:center; gap:5px;
+      padding:4px 9px; border-radius:20px;
+      border:1px solid var(--border); background:var(--surface2);
+      cursor:pointer; font:600 10px/1 'Syne',sans-serif;
+      letter-spacing:.04em; text-transform:uppercase;
+      color:var(--text-dim); transition:all .15s; user-select:none; white-space:nowrap;
+    }
+    .dpill .dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+    .dpill.active { color:var(--text); }
+
+    /* couleurs par domaine */
+    .dpill[data-domain="automation"].active { background:rgba(249,115,22,.18); border-color:rgba(249,115,22,.45); color:#fdba74; }
+    .dpill[data-domain="automation"] .dot   { background:var(--logic-auto); }
+    .dpill[data-domain="script"].active     { background:rgba(167,139,250,.15); border-color:rgba(167,139,250,.4); color:#c4b5fd; }
+    .dpill[data-domain="script"] .dot       { background:var(--logic-script); }
+    .dpill[data-domain="scene"].active      { background:rgba(244,114,182,.15); border-color:rgba(244,114,182,.4); color:#f9a8d4; }
+    .dpill[data-domain="scene"] .dot        { background:var(--logic-scene); }
+    .dpill[data-domain="device"].active     { background:rgba(96,165,250,.15); border-color:rgba(96,165,250,.4); color:#93c5fd; }
+    .dpill[data-domain="device"] .dot       { background:var(--phys-on); }
+    .dpill[data-domain="sensor"].active     { background:rgba(52,211,153,.15); border-color:rgba(52,211,153,.4); color:#6ee7b7; }
+    .dpill[data-domain="sensor"] .dot       { background:var(--meas-active); }
+    .dpill[data-domain="group"].active      { background:rgba(56,189,248,.15); border-color:rgba(56,189,248,.4); color:#7dd3fc; }
+    .dpill[data-domain="group"] .dot        { background:var(--group-color); }
+
+    /* orphan toggle */
+    #orphan-pill {
+      display:flex; align-items:center; gap:5px;
+      padding:4px 9px; border-radius:20px;
+      border:1px solid var(--border); background:var(--surface2);
+      cursor:pointer; font:600 10px/1 'Syne',sans-serif;
+      letter-spacing:.04em; text-transform:uppercase;
+      color:var(--text-dim); transition:all .15s; user-select:none;
+    }
+    #orphan-pill.active { background:rgba(239,68,68,.12); border-color:rgba(239,68,68,.4); color:#fca5a5; }
+    #orphans { display:none; }
+
+    /* status */
+    #status-area { margin-left:auto; display:flex; align-items:center; gap:8px; flex-shrink:0; }
+    #ws-dot {
+      width:7px; height:7px; border-radius:50%;
+      background:var(--text-dim); transition:background .3s, box-shadow .3s;
+    }
+    #ws-dot.ok  { background:#4ade80; box-shadow:0 0 6px #4ade80; }
+    #ws-dot.err { background:#f87171; }
+    #status { font:11px/1 'JetBrains Mono',monospace; color:var(--text-dim); }
+    #progress-bar { width:80px; height:3px; background:var(--border); border-radius:2px; overflow:hidden; display:none; }
+    #progress-bar .fill { height:100%; background:#3d7fff; border-radius:2px; transition:width .25s ease; width:0%; }
+
+    /* ─────────── GRAPH AREA ─────────── */
+    #graph-container { flex:1; position:relative; min-height:0; }
+
+    /* grille fine et subtile */
+    #grid-bg {
+      position:absolute; inset:0; pointer-events:none;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px);
+      background-size: 80px 80px, 80px 80px, 16px 16px, 16px 16px;
+    }
+
+    #cy { position:absolute; inset:0; z-index:1; }
+
+    /* ─────────── LÉGENDE ─────────── */
+    #legend {
+      position:absolute; bottom:14px; left:14px; z-index:15;
+      background:var(--surface); border:1px solid var(--border);
+      border-radius:var(--radius); padding:10px 14px;
+      font-size:10px; line-height:1.8;
+    }
+    .legend-title { font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--text-mid); margin-bottom:6px; font-size:9px; }
+    .legend-row { display:flex; align-items:center; gap:7px; color:var(--text-mid); }
+    .legend-line { width:20px; height:2px; border-radius:1px; flex-shrink:0; }
+    .legend-sep { height:1px; background:var(--border); margin:6px 0; }
+
+    /* ─────────── TOOLTIP ─────────── */
+    #tooltip {
+      position:absolute; z-index:50; pointer-events:none;
+      background:var(--surface); border:1px solid var(--border);
+      border-radius:var(--radius); padding:8px 12px;
+      font-size:12px; max-width:220px;
+      box-shadow:0 8px 24px var(--shadow);
+      opacity:0; transition:opacity .15s; display:none;
+    }
+    #tooltip .tt-name { font-weight:700; color:var(--text); margin-bottom:3px; }
+    #tooltip .tt-id   { font:10px/1 'JetBrains Mono',monospace; color:var(--text-dim); margin-bottom:4px; }
+    #tooltip .tt-state { display:inline-block; padding:2px 7px; border-radius:10px; font-size:10px; font-weight:600; }
+    #tooltip .tt-state.on  { background:rgba(74,222,128,.2); color:#4ade80; }
+    #tooltip .tt-state.off { background:rgba(255,255,255,.06); color:var(--text-dim); }
+    #tooltip .tt-state.unavailable { background:rgba(248,113,113,.2); color:#f87171; }
+    #tooltip .tt-layer { font-size:9px; color:var(--text-dim); margin-top:4px; text-transform:uppercase; letter-spacing:.06em; }
+
+    /* ─────────── SIDEBAR ─────────── */
+    #sidebar {
+      position:absolute; top:0; right:0;
+      width:320px; max-width:90vw; height:100%;
+      background:var(--surface);
+      border-left:1px solid var(--border);
+      box-shadow:-6px 0 30px var(--shadow);
+      z-index:10;
+      transform:translateX(100%); transition:transform .28s cubic-bezier(.4,0,.2,1);
+      overflow-y:auto; padding:20px 16px;
+      font-size:13px;
+    }
+    #sidebar.open { transform:translateX(0); }
+
+    #sidebar-close {
+      position:absolute; top:14px; right:14px;
+      background:transparent; border:none;
+      color:var(--text-dim); cursor:pointer; font-size:18px; padding:4px;
+      border-radius:4px; transition:color .15s, background .15s;
+    }
+    #sidebar-close:hover { color:var(--text); background:var(--border); }
+
+    .sb-layer-badge {
+      display:inline-block; padding:2px 8px; border-radius:4px;
+      font:600 9px/1.6 'Syne',sans-serif; letter-spacing:.08em; text-transform:uppercase;
+      margin-bottom:10px;
+    }
+    .sb-layer-badge.logic   { background:rgba(249,115,22,.18); color:#fdba74; }
+    .sb-layer-badge.physical{ background:rgba(96,165,250,.15); color:#93c5fd; }
+    .sb-layer-badge.measure { background:rgba(52,211,153,.15); color:#6ee7b7; }
+
+    #sidebar h2 { font-size:17px; font-weight:700; margin-bottom:4px; word-break:break-word; }
+    #sidebar .sb-eid { font:10px/1 'JetBrains Mono',monospace; color:var(--text-dim); margin-bottom:12px; word-break:break-all; }
+
+    .state-badge {
+      display:inline-block; padding:3px 10px; border-radius:20px;
+      font-size:11px; font-weight:600; margin-bottom:14px; transition:all .3s;
+    }
+    .state-badge.on          { background:rgba(74,222,128,.18); color:#4ade80; }
+    .state-badge.off         { background:rgba(255,255,255,.06); color:var(--text-dim); }
+    .state-badge.unavailable { background:rgba(248,113,113,.2); color:#f87171; }
+
+    .sb-section { margin-top:14px; }
+    .sb-section-title {
+      font:600 9px/1 'Syne',sans-serif; letter-spacing:.1em;
+      text-transform:uppercase; color:var(--text-dim); margin-bottom:8px;
+    }
+
+    .attr-grid { display:grid; grid-template-columns:auto 1fr; gap:3px 10px; font-size:11px; }
+    .attr-key { color:var(--text-dim); }
+    .attr-val { color:var(--text); font-family:'JetBrains Mono',monospace; font-size:10px; }
+
+    .link-list { list-style:none; display:flex; flex-direction:column; gap:4px; }
+    .link-item {
+      display:flex; align-items:center; gap:7px;
+      padding:5px 8px; border-radius:6px; background:var(--surface2);
+      font-size:11px; cursor:pointer; transition:background .15s;
+    }
+    .link-item:hover { background:var(--border); }
+    .link-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+    .link-type { font-size:9px; color:var(--text-dim); margin-left:auto; text-transform:uppercase; letter-spacing:.04em; }
+    .link-dir  { color:var(--text-dim); font-size:11px; }
+
+    .sb-controls { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+    .sb-controls button {
+      padding:6px 12px; border-radius:var(--radius);
+      border:1px solid var(--border); background:var(--surface2);
+      color:var(--text-mid); cursor:pointer; font:600 11px/1 'Syne',sans-serif;
+      transition:all .15s;
+    }
+    .sb-controls button:hover { background:var(--border); color:var(--text); }
+    .sb-controls button.primary {
+      background:rgba(74,222,128,.18); color:#4ade80;
+      border-color:rgba(74,222,128,.35);
+    }
+    .sb-controls button.primary:hover { background:rgba(74,222,128,.28); }
+
+    .entity-block {
+      padding:10px; background:var(--surface2); border-radius:var(--radius);
+      border:1px solid var(--border); margin-bottom:6px; font-size:12px;
+    }
+    .entity-block .eb-head { display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-bottom:4px; }
+    .entity-block .eb-name { font-weight:600; }
+    .entity-block .eb-eid  { font:9px/1 'JetBrains Mono',monospace; color:var(--text-dim); }
+    .entity-block .eb-attrs { color:var(--text-dim); font-size:10px; margin-top:4px; }
+
+    .sb-sep { height:1px; background:var(--border); margin:14px 0; }
+
+    /* ─────────── AUTH ─────────── */
+    #auth-panel {
+      position:fixed; inset:0; background:var(--bg); z-index:100;
+      display:flex; align-items:center; justify-content:center; padding:20px;
+    }
+    #auth-panel.hidden { display:none; }
+    #auth-panel .card {
+      background:var(--surface); padding:28px;
+      border-radius:12px; max-width:420px; width:100%;
+      border:1px solid var(--border);
+    }
+    #auth-panel h2 { font-size:20px; margin-bottom:6px; }
+    #auth-panel p  { font-size:13px; color:var(--text-mid); margin-bottom:18px; }
+    #auth-panel label { display:block; font-size:11px; color:var(--text-dim); margin-bottom:5px; text-transform:uppercase; letter-spacing:.06em; }
+    #auth-panel input {
+      width:100%; padding:10px; background:var(--surface2);
+      border:1px solid var(--border); border-radius:var(--radius);
+      color:var(--text); margin-bottom:14px; font-size:13px;
+      transition:border-color .2s;
+    }
+    #auth-panel input:focus { outline:none; border-color:#3d7fff; }
+    #auth-panel button {
+      width:100%; padding:11px; background:#3d7fff; color:#fff;
+      border:none; border-radius:var(--radius); cursor:pointer;
+      font:700 13px/1 'Syne',sans-serif; letter-spacing:.05em; transition:opacity .15s;
+    }
+    #auth-panel button:hover { opacity:.9; }
+    #auth-panel .hint { font-size:11px; color:var(--text-dim); margin-top:12px; line-height:1.5; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- AUTH -->
+  <div id="auth-panel">
+    <div class="card">
+      <h2>HA Graph Explorer</h2>
+      <p>Connexion à votre instance Home Assistant</p>
+      <label for="base-url-input">URL de base (optionnel)</label>
+      <input type="text" id="base-url-input" placeholder="https://homeassistant.local:8123" autocomplete="off">
+      <label for="token-input">Token d'accès longue durée</label>
+      <input type="password" id="token-input" placeholder="eyJhbGc..." autocomplete="off">
+      <button type="button" id="auth-save">Connecter</button>
+      <p class="hint">Profil HA → Sécurité → Token d'accès. Le token est stocké localement dans ce navigateur.</p>
+    </div>
+  </div>
+
+  <!-- TOOLBAR -->
+  <div id="toolbar">
+    <span class="tb-title">HA Graph</span>
+    <div class="search-wrap">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="search" placeholder="Rechercher…">
+    </div>
+    <div class="tb-sep"></div>
+    <div id="domain-filters"></div>
+    <div class="tb-sep"></div>
+    <label id="orphan-pill">
+      <input type="checkbox" id="orphans">
+      <span class="dot" style="width:6px;height:6px;border-radius:50%;background:#ef4444;flex-shrink:0;"></span>
+      Orphelins
+    </label>
+    <div class="tb-sep"></div>
+    <button class="tb-btn" id="btn-reset-layout">Auto-layout</button>
+    <button class="tb-btn" id="btn-center">Centrer</button>
+    <div id="status-area">
+      <div id="progress-bar"><div class="fill"></div></div>
+      <div id="ws-dot"></div>
+      <span id="status">Déconnecté</span>
+    </div>
+  </div>
+
+  <!-- GRAPH -->
+  <div id="graph-container">
+    <div id="grid-bg"></div>
+    <div id="cy"></div>
+
+    <!-- LÉGENDE -->
+    <div id="legend">
+      <div class="legend-title">Couches</div>
+      <div class="legend-row"><span style="width:10px;height:10px;border-radius:50%;background:#f97316;flex-shrink:0;display:inline-block;"></span> Automation</div>
+      <div class="legend-row"><span style="width:10px;height:10px;border-radius:50%;background:#a78bfa;flex-shrink:0;display:inline-block;"></span> Script</div>
+      <div class="legend-row"><span style="width:10px;height:10px;border-radius:50%;background:#f472b6;flex-shrink:0;display:inline-block;"></span> Scène</div>
+      <div class="legend-row"><span style="width:10px;height:10px;border-radius:50%;background:#60a5fa;flex-shrink:0;display:inline-block;"></span> Appareil</div>
+      <div class="legend-row"><span style="width:10px;height:10px;border-radius:50%;background:#34d399;flex-shrink:0;display:inline-block;"></span> Capteur</div>
+      <div class="legend-row"><span style="width:10px;height:10px;border-radius:50%;background:#38bdf8;flex-shrink:0;display:inline-block;"></span> Groupe / Zone</div>
+      <div class="legend-sep"></div>
+      <div class="legend-title">Liens</div>
+      <div class="legend-row"><div class="legend-line" style="background:#f97316;"></div> Déclencheur</div>
+      <div class="legend-row"><div class="legend-line" style="background:#a78bfa;"></div> Action</div>
+      <div class="legend-row"><div class="legend-line" style="background:#38bdf8;"></div> Membre</div>
+      <div class="legend-row"><div class="legend-line" style="background:#f472b6;"></div> Cible</div>
+    </div>
+  </div>
+
+  <!-- TOOLTIP -->
+  <div id="tooltip">
+    <div class="tt-name"></div>
+    <div class="tt-id"></div>
+    <span class="tt-state"></span>
+    <div class="tt-layer"></div>
+  </div>
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar">
+    <button type="button" id="sidebar-close" aria-label="Fermer">✕</button>
+    <div id="sidebar-content"></div>
+  </aside>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+<script src="https://unpkg.com/webcola/WebCola/cola.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-cola@2.4.0/cytoscape-cola.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* ─── CONSTANTES ─── */
+  const STORAGE_TOKEN  = 'ha_graph_token';
+  const STORAGE_LAYOUT = 'ha_graph_layout_v3';
+  const STORAGE_BASE   = 'ha_graph_base';
+
+  const VIRTUAL_DOMAINS = new Set(['automation','script','scene','group','zone']);
+  const SENSOR_DOMAINS  = new Set(['sensor','binary_sensor','number','input_number',
+                                   'input_boolean','input_select','input_text','counter',
+                                   'timer','weather','sun','calendar']);
+
+  /* ─── HIÉRARCHIE visuelle ───
+     LAYER 0 = Logique  (automations, scripts, scènes)  → grand, saturé, toujours visible
+     LAYER 1 = Physique (devices)                       → moyen
+     LAYER 2 = Mesure   (capteurs / sensors)            → petit, discret
+     LAYER 3 = Groupe/Zone                              → moyen-grand, bleu
+  */
+  function getLayer(domain) {
+    if (['automation','script','scene'].includes(domain)) return 0;
+    if (domain === 'device') return 1;
+    if (['group','zone'].includes(domain)) return 3;
+    if (SENSOR_DOMAINS.has(domain)) return 2;
+    return 1; // autres physiques
+  }
+
+  const LAYER_SIZE = [72, 52, 32, 58];  // px par couche
+  const LAYER_LABEL = ['Logique','Physique','Mesure','Groupe/Zone'];
+
+  /* Couleur de base du noeud selon domaine */
+  function nodeBaseColor(domain, state) {
+    const unavail = state === 'unavailable';
+    const off     = state === 'off' || state === 'idle' || state === 'paused';
+    if (unavail) return '#ef4444';
+    switch(domain) {
+      case 'automation': return off ? '#7c3a18' : '#f97316';
+      case 'script':     return off ? '#4c3a75' : '#a78bfa';
+      case 'scene':      return '#f472b6';
+      case 'group':
+      case 'zone':       return off ? '#1e3a4a' : '#38bdf8';
+      case 'device':     return off ? '#1e2a3d' : '#60a5fa';
+      default:           // sensors
+        if (domain === 'binary_sensor') return off ? '#1a2c25' : '#34d399';
+        return off ? '#1a2c25' : '#34d399';
+    }
+  }
+
+  /* Opacité du label selon couche */
+  function labelOpacity(layer) {
+    return [1, 0.85, 0.6, 0.9][layer];
+  }
+
+  /* ─── DOMAINES affichés dans la toolbar ─── */
+  const FILTER_DOMAINS = [
+    { id:'automation', label:'Automations', color:'#f97316' },
+    { id:'script',     label:'Scripts',     color:'#a78bfa' },
+    { id:'scene',      label:'Scènes',      color:'#f472b6' },
+    { id:'device',     label:'Appareils',   color:'#60a5fa' },
+    { id:'sensor',     label:'Capteurs',    color:'#34d399' },
+    { id:'group',      label:'Groupes',     color:'#38bdf8' },
+  ];
+
+  const EDGE_COLORS = { trigger:'#f97316', action:'#a78bfa', member:'#38bdf8', target:'#f472b6' };
+
+  /* ─── STATE ─── */
+  let cy = null, ws = null, wsMessageId = 0;
+  let states = {}, graphData = { nodes:[], edges:[] };
+  let baseUrl = '', deviceRegistry = [], entityToDevice = {}, deviceToEntities = {};
+  let currentSidebarNodeId = null;
+  let wsReconnectTimer = null;
+  if (!window.__haWsPending) window.__haWsPending = {};
+
+  /* ─── AUTH ─── */
+  function getToken()       { return localStorage.getItem(STORAGE_TOKEN) || ''; }
+  function setToken(t)      { t ? localStorage.setItem(STORAGE_TOKEN,t) : localStorage.removeItem(STORAGE_TOKEN); }
+  function getBaseUrl()     { return localStorage.getItem(STORAGE_BASE) || new URL(location.href).origin; }
+  function setBaseUrl(url)  { localStorage.setItem(STORAGE_BASE, url); }
+  function showAuth(show)   { document.getElementById('auth-panel').classList.toggle('hidden',!show); }
+
+  /* ─── STATUS ─── */
+  function setStatus(text, ok) {
+    document.getElementById('status').textContent = text;
+    const dot = document.getElementById('ws-dot');
+    dot.className = ok ? 'ok' : (ok === false ? 'err' : '');
+  }
+  function setProgress(show, pct, text) {
+    const bar  = document.getElementById('progress-bar');
+    const fill = bar.querySelector('.fill');
+    bar.style.display = show ? 'block' : 'none';
+    fill.style.width  = (pct||0) + '%';
+  }
+
+  /* ─── WEBSOCKET ─── */
+  function wsConnect() {
+    baseUrl = getBaseUrl();
+    const token = getToken();
+    if (!token) { showAuth(true); return; }
+    const wsUrl = baseUrl.replace(/^http/, 'ws') + '/api/websocket';
+    ws = new WebSocket(wsUrl);
+    ws.onopen  = () => setStatus('Connexion…', null);
+    ws.onmessage = (ev) => {
+      const msg = JSON.parse(ev.data);
+      if (msg.type === 'auth_required') { ws.send(JSON.stringify({ type:'auth', access_token:token })); return; }
+      if (msg.type === 'auth_ok')       { setStatus('Connecté', true); loadData(); subscribeStateChanged(); return; }
+      if (msg.type === 'auth_invalid')  { setStatus('Token invalide', false); showAuth(true); return; }
+      if (msg.type === 'result') {
+        const p = window.__haWsPending[msg.id];
+        if (p) { clearTimeout(p.timer); delete window.__haWsPending[msg.id]; msg.success !== false ? p.resolve(msg.result) : p.reject(new Error(msg.error?.message||'WS error')); }
+        return;
+      }
+      if (msg.type === 'event' && msg.event?.event_type === 'state_changed') {
+        const d = msg.event.data;
+        if (d.entity_id && d.new_state) { states[d.entity_id] = d.new_state; updateNodeState(d.entity_id, d.new_state); }
+      }
+    };
+    ws.onclose  = () => { setStatus('Déconnecté', false); wsReconnectTimer = setTimeout(wsConnect, 3000); };
+    ws.onerror  = () => {};
+  }
+
+  function wsSend(type, extra={}) {
+    return new Promise((resolve, reject) => {
+      if (!ws || ws.readyState !== WebSocket.OPEN) { reject(new Error('WS non connecté')); return; }
+      const id = ++wsMessageId;
+      const timer = setTimeout(() => { delete window.__haWsPending[id]; reject(new Error('Timeout')); }, 20000);
+      window.__haWsPending[id] = { resolve, reject, timer };
+      ws.send(JSON.stringify({ id, type, ...extra }));
+    });
+  }
+
+  function callService(domain, service, data={}) {
+    return wsSend('call_service', { domain, service, service_data:data });
+  }
+
+  function subscribeStateChanged() {
+    wsSend('subscribe_events', { event_type:'state_changed' }).catch(()=>{});
+  }
+
+  /* ─── HELPERS ─── */
+  function entityDomain(id) { const i=id.indexOf('.'); return i>0 ? id.slice(0,i) : ''; }
+
+  function getFilterDomain(domain) {
+    if (SENSOR_DOMAINS.has(domain)) return 'sensor';
+    if (domain === 'zone') return 'group';
+    return domain;
+  }
+
+  function entityToNodeId(eid) {
+    if (!eid || typeof eid !== 'string') return null;
+    if (!eid.includes('.')) return eid;
+    const domain = entityDomain(eid);
+    if (VIRTUAL_DOMAINS.has(domain)) return eid;
+    return entityToDevice[eid] || eid;
+  }
+
+  function deviceAggregatedState(deviceId) {
+    const eids = deviceToEntities[deviceId] || [];
+    let hasOn=false, allUnavail=true;
+    eids.forEach(eid => {
+      const s = states[eid];
+      if (!s) return;
+      if (s.state !== 'unavailable') allUnavail = false;
+      if (s.state === 'on') hasOn = true;
+    });
+    if (eids.length && allUnavail) return 'unavailable';
+    return hasOn ? 'on' : 'off';
+  }
+
+  function getEntityIdsFromAttributes(attrs) {
+    if (!attrs) return [];
+    let list = attrs.entity_id || attrs.entities || attrs.members;
+    if (typeof list === 'string') list = [list];
+    if (!Array.isArray(list)) return [];
+    return list.filter(id => typeof id === 'string' && id.includes('.'));
+  }
+
+  /* ─── PARSE AUTOMATION/SCRIPT CONFIG ─── */
+  function parseConfig(config) {
+    const entityIds = new Set(), deviceIds = new Set();
+    if (!config || typeof config !== 'object') return { entityIds, deviceIds };
+    const addE = v => { if (typeof v==='string' && v.includes('.')) entityIds.add(v); if(Array.isArray(v)) v.forEach(addE); };
+    const addD = v => { if (typeof v==='string' && v.length>10) deviceIds.add(v); if(Array.isArray(v)) v.forEach(addD); };
+    const walk = obj => {
+      if (!obj || typeof obj !== 'object') return;
+      if (obj.entity_id) addE(obj.entity_id);
+      if (obj.entity) addE(obj.entity);
+      if (obj.entities) addE(obj.entities);
+      if (obj.device_id) addD(obj.device_id);
+      if (obj.data?.entity_id) addE(obj.data.entity_id);
+      if (obj.data?.device_id) addD(obj.data.device_id);
+      if (obj.target?.entity_id) addE(obj.target.entity_id);
+      if (obj.target?.device_id) addD(obj.target.device_id);
+      ['trigger','triggers','action','actions','condition','conditions','sequence','default','if','then','else','wait_for_trigger']
+        .forEach(k => { if (obj[k]) (Array.isArray(obj[k]) ? obj[k] : [obj[k]]).forEach(walk); });
+      if (obj.repeat) walk(obj.repeat);
+      if (obj.choose) (Array.isArray(obj.choose)?obj.choose:[obj.choose]).forEach(b => {
+        if (b?.conditions) b.conditions.forEach(walk);
+        if (b?.sequence)  (Array.isArray(b.sequence)?b.sequence:[b.sequence]).forEach(walk);
+      });
+      if (Array.isArray(obj)) obj.forEach(walk);
+      else Object.values(obj).forEach(walk);
+    };
+    walk(config);
+    return { entityIds, deviceIds };
+  }
+
+  /* ─── LOAD DATA ─── */
+  function loadData() {
+    setStatus('Chargement…', true);
+    setProgress(true, 5, '');
+    Promise.all([
+      wsSend('get_states'),
+      wsSend('config/device_registry/list').catch(()=>[]),
+      wsSend('config/entity_registry/list').catch(()=>[])
+    ]).then(([statesResult, devicesRaw, entitiesRaw]) => {
+      const list = statesResult || [];
+      deviceRegistry = Array.isArray(devicesRaw) ? devicesRaw : (devicesRaw?.devices || []);
+      const entities = Array.isArray(entitiesRaw) ? entitiesRaw : [];
+
+      states = list.reduce((acc,s) => { acc[s.entity_id]=s; return acc; }, {});
+      entityToDevice = {}; deviceToEntities = {};
+      entities.forEach(ent => {
+        if (ent.entity_id && ent.device_id) {
+          entityToDevice[ent.entity_id] = ent.device_id;
+          (deviceToEntities[ent.device_id] = deviceToEntities[ent.device_id]||[]).push(ent.entity_id);
+        }
+      });
+
+      setProgress(true, 25, '');
+      return buildGraph();
+    }).then(() => {
+      setProgress(true, 85, '');
+      renderGraph();
+      loadLayout();
+      setProgress(false);
+      setStatus(`Connecté · ${graphData.nodes.length} nœuds · ${graphData.edges.length} liens`, true);
+    }).catch(err => {
+      setProgress(false);
+      setStatus('Erreur: ' + (err.message||err), false);
+    });
+  }
+
+  /* ─── BUILD GRAPH ─── */
+  function buildGraph() {
+    const nodeIds = new Set();
+    const nodes = [], entityEdges = [];
+
+    // Devices → physique
+    deviceRegistry.forEach(dev => {
+      const id    = dev.id;
+      const name  = dev.name_by_user || dev.name || 'Sans nom';
+      const state = deviceAggregatedState(id);
+      nodeIds.add(id);
+      nodes.push({ id, domain:'device', label:name, state, entityIds: deviceToEntities[id]||[] });
+    });
+
+    // Virtual domains → logique / groupe
+    Object.keys(states).forEach(eid => {
+      const domain = entityDomain(eid);
+      if (!VIRTUAL_DOMAINS.has(domain)) return;
+      const s = states[eid];
+      nodeIds.add(eid);
+      nodes.push({ id:eid, domain, label:(s.attributes?.friendly_name)||eid, state:s.state, entityIds:[eid] });
+    });
+
+    // Sensors sans device → mesure
+    Object.keys(states).forEach(eid => {
+      const domain = entityDomain(eid);
+      if (!SENSOR_DOMAINS.has(domain) || VIRTUAL_DOMAINS.has(domain)) return;
+      if (entityToDevice[eid] && deviceToEntities[entityToDevice[eid]]) return; // déjà dans un device
+      const s = states[eid];
+      nodeIds.add(eid);
+      nodes.push({ id:eid, domain, label:(s.attributes?.friendly_name)||eid, state:s.state, entityIds:[eid] });
+    });
+
+    // Edges — groupes / scènes
+    Object.values(states).forEach(s => {
+      const domain = entityDomain(s.entity_id);
+      const attrs  = s.attributes || {};
+      if (domain === 'group' || domain === 'zone')
+        getEntityIdsFromAttributes(attrs).forEach(tid => entityEdges.push({ source:s.entity_id, target:tid, type:'member' }));
+      if (domain === 'scene')
+        getEntityIdsFromAttributes(attrs).forEach(tid => entityEdges.push({ source:s.entity_id, target:tid, type:'target' }));
+    });
+
+    return tryFetchAutoScriptEdges(entityEdges, new Set(Object.keys(states))).then(() => {
+      const edgeKeys = new Set();
+      const edges = [];
+      entityEdges.forEach(({ source:srcE, target:tgtE, type }) => {
+        const srcN = entityToNodeId(srcE);
+        const tgtN = entityToNodeId(tgtE);
+        if (srcN && tgtN && srcN !== tgtN && nodeIds.has(srcN) && nodeIds.has(tgtN)) {
+          const key = srcN+'|'+tgtN+'|'+type;
+          if (!edgeKeys.has(key)) { edgeKeys.add(key); edges.push({ source:srcN, target:tgtN, type }); }
+        }
+      });
+      graphData = { nodes, edges };
+    });
+  }
+
+  function tryFetchAutoScriptEdges(edges, knownIds) {
+    const autoIds   = Object.keys(states).filter(k=>k.startsWith('automation.'));
+    const scriptIds = Object.keys(states).filter(k=>k.startsWith('script.'));
+
+    function addEdges(sourceEid, config, edgeType) {
+      if (!config || typeof config !== 'object') return;
+      const { entityIds:ids, deviceIds:dids } = parseConfig(config);
+      ids.forEach(tid  => { if (knownIds.has(tid))  edges.push({ source:sourceEid, target:tid, type:edgeType }); });
+      dids.forEach(did => { edges.push({ source:sourceEid, target:did, type:edgeType }); });
+    }
+
+    function batched(arr, size, fn) {
+      let p = Promise.resolve();
+      for (let i=0; i<arr.length; i+=size) {
+        const batch = arr.slice(i, i+size);
+        p = p.then(() => Promise.all(batch.map(fn)));
+      }
+      return p;
+    }
+
+    return Promise.all([
+      batched(autoIds, 5, eid =>
+        wsSend('automation/config', { entity_id:eid })
+          .then(r => addEdges(eid, r?.config ?? r, 'trigger')).catch(()=>{})),
+      batched(scriptIds, 5, eid =>
+        wsSend('script/config', { entity_id:eid })
+          .then(r => addEdges(eid, r?.config ?? r, 'action')).catch(()=>{}))
+    ]);
+  }
+
+  /* ─── RENDER GRAPH ─── */
+  function renderGraph() {
+    if (cy) cy.destroy();
+
+    const elements = [
+      ...graphData.nodes.map(n => {
+        const layer   = getLayer(n.domain);
+        const size    = LAYER_SIZE[layer];
+        const color   = nodeBaseColor(n.domain, n.state);
+        const fDomain = getFilterDomain(n.domain);
+        return {
+          data: {
+            id: n.id, label: n.label, domain: n.domain,
+            filterDomain: fDomain, state: n.state,
+            layer, color, size
+          }
+        };
+      }),
+      ...graphData.edges.map((e,i) => ({
+        data: { id:'e'+i, source:e.source, target:e.target, type:e.type||'member' }
+      }))
+    ];
+
+    cy = cytoscape({
+      container: document.getElementById('cy'),
+      elements,
+      style: [
+        /* ── NOEUDS ── */
+        {
+          selector: 'node',
+          style: {
+            'width': 'data(size)',
+            'height': 'data(size)',
+            'background-color': 'data(color)',
+            'border-width': 2,
+            'border-color': (ele) => {
+              const c = ele.data('color');
+              return c === '#ef4444' ? '#f87171' : c;
+            },
+            'border-opacity': 0.6,
+            'label': 'data(label)',
+            'text-valign': 'bottom',
+            'text-halign': 'center',
+            'font-family': 'Syne, sans-serif',
+            'font-size': (ele) => {
+              const layer = ele.data('layer');
+              return [11, 10, 8, 10][layer] + 'px';
+            },
+            'color': '#c8d0e0',
+            'text-opacity': (ele) => labelOpacity(ele.data('layer')),
+            'text-margin-y': 6,
+            'text-wrap': 'ellipsis',
+            'text-max-width': '100px',
+            'transition-property': 'background-color, border-color, opacity, width, height',
+            'transition-duration': '0.3s',
+            /* Ombre simulée via outline */
+            'overlay-color': '#000',
+            'overlay-opacity': 0,
+            'shadow-blur': (ele) => [16, 8, 0, 12][ele.data('layer')],
+            'shadow-color': (ele) => ele.data('color'),
+            'shadow-opacity': (ele) => {
+              const layer = ele.data('layer');
+              const state = ele.data('state');
+              if (state === 'on') return [0.6, 0.35, 0.15, 0.45][layer];
+              return 0;
+            },
+            'shadow-offset-x': 0,
+            'shadow-offset-y': 0,
+          }
+        },
+        /* Formes par couche */
+        { selector: 'node[layer=0][domain="automation"]', style: { shape:'diamond' } },
+        { selector: 'node[layer=0][domain="script"]',     style: { shape:'rectangle' } },
+        { selector: 'node[layer=0][domain="scene"]',      style: { shape:'triangle' } },
+        { selector: 'node[layer=3]',                      style: { shape:'hexagon' } },
+        /* Sélection / hover */
+        { selector: 'node:selected', style: { 'border-width':3, 'border-color':'#fff', 'border-opacity':0.8 } },
+        { selector: 'node.highlight', style: { 'border-width':3, 'border-color':'#fff', 'border-opacity':0.7 } },
+        { selector: 'node.dim',   style: { opacity:0.15 } },
+        { selector: 'node.orphan', style: { 'border-width':3, 'border-color':'#ef4444', 'border-opacity':1 } },
+        { selector: 'node.hidden', style: { display:'none' } },
+
+        /* ── ARÊTES ── */
+        {
+          selector: 'edge',
+          style: {
+            width: 1.5,
+            'line-color': '#38bdf8',
+            'target-arrow-color': '#38bdf8',
+            'target-arrow-shape': 'triangle',
+            'curve-style': 'bezier',
+            opacity: 0.45,
+            'transition-duration': '0.3s',
+          }
+        },
+        { selector: 'edge[type="trigger"]', style: { 'line-color': '#f97316', 'target-arrow-color': '#f97316', width:2, opacity:0.6 } },
+        { selector: 'edge[type="action"]',  style: { 'line-color': '#a78bfa', 'target-arrow-color': '#a78bfa', width:1.5, opacity:0.5 } },
+        { selector: 'edge[type="member"]',  style: { 'line-color': '#38bdf8', 'target-arrow-color': '#38bdf8', 'line-style':'dashed', 'line-dash-pattern':[4,4] } },
+        { selector: 'edge[type="target"]',  style: { 'line-color': '#f472b6', 'target-arrow-color': '#f472b6' } },
+        { selector: 'edge.highlight', style: { width:3, opacity:0.9 } },
+        { selector: 'edge.dim',  style: { opacity:0.05 } },
+        { selector: 'edge.hidden', style: { display:'none' } },
+      ],
+      layout: { name:'preset' },
+      minZoom: 0.05, maxZoom: 5, wheelSensitivity: 0.3
+    });
+
+    bindEvents();
+    buildDomainFilters();
+  }
+
+  /* ─── EVENTS ─── */
+  const tooltip = document.getElementById('tooltip');
+
+  function showTooltip(node, x, y) {
+    const data   = node.data();
+    const layer  = data.layer;
+    const stCls  = data.state === 'on' ? 'on' : (data.state === 'unavailable' ? 'unavailable' : 'off');
+    tooltip.querySelector('.tt-name').textContent  = data.label;
+    tooltip.querySelector('.tt-id').textContent    = data.id;
+    tooltip.querySelector('.tt-state').textContent = data.state || '—';
+    tooltip.querySelector('.tt-state').className   = 'tt-state ' + stCls;
+    tooltip.querySelector('.tt-layer').textContent = LAYER_LABEL[layer] || '';
+    tooltip.style.display = 'block';
+    positionTooltip(x, y);
+    requestAnimationFrame(() => tooltip.style.opacity = '1');
+  }
+
+  function hideTooltip() {
+    tooltip.style.opacity = '0';
+    setTimeout(() => { tooltip.style.display = 'none'; }, 150);
+  }
+
+  function positionTooltip(x, y) {
+    const W = window.innerWidth, H = window.innerHeight;
+    const tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
+    let left = x + 14, top = y + 14;
+    if (left + tw > W - 10) left = x - tw - 14;
+    if (top + th > H - 10) top  = y - th - 14;
+    tooltip.style.left = left + 'px';
+    tooltip.style.top  = top  + 'px';
+  }
+
+  function bindEvents() {
+    cy.on('tap', 'node', evt => {
+      hideTooltip();
+      openSidebar(evt.target.data('id'));
+    });
+
+    cy.on('tap', evt => {
+      if (evt.target === cy) closeSidebar();
+    });
+
+    cy.on('mouseover', 'node', evt => {
+      const node = evt.target;
+      const pos  = evt.renderedPosition || evt.position;
+      const cont = document.getElementById('graph-container').getBoundingClientRect();
+      showTooltip(node, cont.left + pos.x, cont.top + pos.y);
+      const nbh = node.neighborhood();
+      cy.elements().addClass('dim');
+      node.removeClass('dim').addClass('highlight');
+      nbh.removeClass('dim').addClass('highlight');
+    });
+
+    cy.on('mousemove', (evt) => {
+      if (tooltip.style.display === 'block') {
+        const cont = document.getElementById('graph-container').getBoundingClientRect();
+        const rp   = evt.renderedPosition;
+        positionTooltip(cont.left + rp.x, cont.top + rp.y);
+      }
+    });
+
+    cy.on('mouseout', 'node', () => {
+      hideTooltip();
+      cy.elements().removeClass('dim highlight');
+    });
+
+    cy.on('drag', 'node', () => saveLayout());
+
+    document.getElementById('btn-reset-layout').onclick = applyLayout;
+    document.getElementById('btn-center').onclick       = () => cy?.fit(50);
+    document.getElementById('sidebar-close').onclick    = closeSidebar;
+    document.getElementById('search').oninput           = onSearch;
+    document.getElementById('orphan-pill').onclick      = toggleOrphanPill;
+
+    document.getElementById('sidebar-content').addEventListener('click', e => {
+      const btn = e.target.closest('button.ha-ctrl');
+      if (!btn) return;
+      btn.disabled = true;
+      callService(btn.dataset.domain, btn.dataset.service, { entity_id: btn.dataset.eid })
+        .then(() => { setTimeout(() => { if (currentSidebarNodeId) openSidebar(currentSidebarNodeId); }, 400); })
+        .catch(()=>{})
+        .finally(() => { btn.disabled = false; });
+
+      const linkBtn = e.target.closest('[data-nodeid]');
+      if (linkBtn && !linkBtn.classList.contains('ha-ctrl')) openSidebar(linkBtn.dataset.nodeid);
+    });
+  }
+
+  /* ─── DOMAIN FILTERS ─── */
+  function buildDomainFilters() {
+    const wrap = document.getElementById('domain-filters');
+    wrap.innerHTML = FILTER_DOMAINS.map(d => `
+      <div class="dpill active" data-domain="${d.id}" title="${d.label}">
+        <span class="dot" style="background:${d.color}"></span>${d.label}
+      </div>`).join('');
+    wrap.querySelectorAll('.dpill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        pill.classList.toggle('active');
+        applyDomainFilter();
+      });
+    });
+  }
+
+  function applyDomainFilter() {
+    const active = new Set(
+      Array.from(document.querySelectorAll('.dpill.active')).map(p=>p.dataset.domain)
+    );
+    if (!cy) return;
+    cy.nodes().forEach(n => n.toggleClass('hidden', !active.has(n.data('filterDomain'))));
+    cy.edges().forEach(e => e.toggleClass('hidden', e.source().hasClass('hidden') || e.target().hasClass('hidden')));
+  }
+
+  /* ─── ORPHAN TOGGLE ─── */
+  function toggleOrphanPill() {
+    const pill = document.getElementById('orphan-pill');
+    pill.classList.toggle('active');
+    const show = pill.classList.contains('active');
+    if (!cy) return;
+    const withEdges = new Set();
+    cy.edges().forEach(ed => { withEdges.add(ed.source().id()); withEdges.add(ed.target().id()); });
+    cy.nodes().forEach(n => n.toggleClass('orphan', show && !withEdges.has(n.id())));
+  }
+
+  /* ─── SEARCH ─── */
+  function onSearch() {
+    const q = document.getElementById('search').value.trim().toLowerCase();
+    if (!cy || !q) { cy?.elements().removeClass('dim highlight'); return; }
+    const match = n => n.data('id').toLowerCase().includes(q) || n.data('label').toLowerCase().includes(q);
+    cy.elements().addClass('dim');
+    cy.nodes().filter(match).removeClass('dim').addClass('highlight');
+    cy.nodes().filter(match).connectedEdges().removeClass('dim');
+    const first = cy.nodes().filter(match).first();
+    if (first.length) cy.animate({ center:{ eles:first }, zoom:1.8 }, { duration:350 });
+  }
+
+  /* ─── LAYOUT ─── */
+  function applyLayout() {
+    if (!cy) return;
+    try {
+      cy.layout({
+        name:'cola', animate:true, animationDuration:500,
+        nodeSpacing: 55, edgeLength: 130,
+        avoidOverlap:true, handleDisconnected:true,
+        padding:60, nodeDimensionsIncludeLabels:true,
+        maxSimulationTime:6000, fit:true
+      }).run();
+      setTimeout(saveLayout, 600);
+    } catch(e) {
+      cy.layout({ name:'cose', animate:true, nodeRepulsion:900000, idealEdgeLength:130, padding:50, fit:true }).run();
+      setTimeout(saveLayout, 600);
+    }
+  }
+
+  function saveLayout() {
+    if (!cy) return;
+    const pos = {};
+    cy.nodes().forEach(n => { const p=n.position(); pos[n.id()]={x:p.x, y:p.y}; });
+    localStorage.setItem(STORAGE_LAYOUT, JSON.stringify(pos));
+  }
+
+  function loadLayout() {
+    try {
+      const raw = localStorage.getItem(STORAGE_LAYOUT);
+      const pos = raw ? JSON.parse(raw) : null;
+      if (pos && cy) {
+        cy.nodes().forEach(n => { const p=pos[n.id()]; if(p) n.position(p); });
+        cy.fit(50);
+      } else { applyLayout(); }
+    } catch(e) { applyLayout(); }
+  }
+
+  /* ─── LIVE STATE UPDATE ─── */
+  function updateNodeState(entityId, newState) {
+    if (!cy) return;
+    const nodeId = entityToNodeId(entityId);
+    if (!nodeId) return;
+    const node = cy.getElementById(nodeId);
+    if (!node.length) return;
+    const domain = node.data('domain');
+    const state  = nodeId === entityId ? newState.state : deviceAggregatedState(nodeId);
+    node.data('state', state);
+    node.data('color', nodeBaseColor(domain, state));
+  }
+
+  /* ─── SIDEBAR ─── */
+  function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+  function layerBadgeHtml(domain) {
+    const layer = getLayer(domain);
+    const cls   = ['logic','physical','measure','physical'][layer];
+    const lbl   = LAYER_LABEL[layer];
+    return `<span class="sb-layer-badge ${cls}">${lbl}</span>`;
+  }
+
+  function stateClass(state) {
+    if (state==='on') return 'on';
+    if (state==='unavailable') return 'unavailable';
+    return 'off';
+  }
+
+  function ctrlHtml(entityId) {
+    const domain = entityDomain(entityId);
+    const s = states[entityId];
+    if (!s || s.state==='unavailable') return '';
+    const b = (svc, lbl, primary=false) =>
+      `<button type="button" class="ha-ctrl${primary?' primary':''}" data-eid="${esc(entityId)}" data-domain="${esc(domain)}" data-service="${esc(svc)}">${lbl}</button>`;
+    if (domain==='automation') return `<div class="sb-controls">${b('trigger','Déclencher',true)}${b('turn_on','Activer')}${b('turn_off','Désactiver')}</div>`;
+    if (domain==='script')     return `<div class="sb-controls">${b('turn_on','Exécuter',true)}</div>`;
+    if (domain==='scene')      return `<div class="sb-controls">${b('turn_on','Activer',true)}</div>`;
+    if (['light','switch','fan','input_boolean'].includes(domain)) return `<div class="sb-controls">${b('turn_on','On',true)}${b('turn_off','Off')}</div>`;
+    if (domain==='cover')      return `<div class="sb-controls">${b('open_cover','Ouvrir',true)}${b('close_cover','Fermer')}${b('stop_cover','Stop')}</div>`;
+    if (domain==='lock')       return `<div class="sb-controls">${b('lock','Verrouiller')}${b('unlock','Déverrouiller',true)}</div>`;
+    return '';
+  }
+
+  function attrsHtml(s) {
+    if (!s) return '';
+    const attrs = s.attributes || {};
+    const keys  = ['unit_of_measurement','current_temperature','temperature','humidity','battery_level','brightness','power','device_class'];
+    const rows  = [];
+    if (s.state) {
+      const u = attrs.unit_of_measurement ? ' '+attrs.unit_of_measurement : '';
+      rows.push(`<span class="attr-key">état</span><span class="attr-val">${esc(s.state+u)}</span>`);
+    }
+    keys.filter(k=>k!=='unit_of_measurement').forEach(k => {
+      if (attrs[k]!=null) rows.push(`<span class="attr-key">${esc(k)}</span><span class="attr-val">${esc(String(attrs[k]))}</span>`);
+    });
+    return rows.length ? `<div class="attr-grid">${rows.join('')}</div>` : '';
+  }
+
+  function linksHtml(nodeId) {
+    const out = graphData.edges.filter(e=>e.source===nodeId);
+    const inc = graphData.edges.filter(e=>e.target===nodeId);
+    if (!out.length && !inc.length) return '';
+    const nodeLabel = id => (graphData.nodes.find(n=>n.id===id)||{}).label || id;
+    const edgeColor = type => EDGE_COLORS[type] || '#888';
+    const row = (id, type, dir) =>
+      `<li class="link-item" data-nodeid="${esc(id)}">
+        <span class="link-dot" style="background:${edgeColor(type)}"></span>
+        <span class="link-dir">${dir}</span>
+        <span>${esc(nodeLabel(id))}</span>
+        <span class="link-type">${type}</span>
+      </li>`;
+    return `
+      <div class="sb-section">
+        <div class="sb-section-title">Liens (${out.length+inc.length})</div>
+        <ul class="link-list">
+          ${out.map(e=>row(e.target, e.type, '→')).join('')}
+          ${inc.map(e=>row(e.source, e.type, '←')).join('')}
+        </ul>
+      </div>`;
+  }
+
+  function openSidebar(nodeId) {
+    currentSidebarNodeId = nodeId;
+    const node = graphData.nodes.find(n=>n.id===nodeId);
+    if (!node) return;
+    const content = document.getElementById('sidebar-content');
+    const state   = node.domain === 'device' ? deviceAggregatedState(nodeId) : node.state;
+
+    let html = `
+      ${layerBadgeHtml(node.domain)}
+      <h2>${esc(node.label)}</h2>
+      <div class="sb-eid">${esc(nodeId)}</div>
+      <span class="state-badge ${stateClass(state)}">${esc(state)}</span>`;
+
+    if (node.domain === 'device') {
+      const eids = node.entityIds || [];
+      html += `<div class="sb-sep"></div><div class="sb-section-title">${eids.length} entité(s)</div>`;
+      eids.forEach(eid => {
+        const s    = states[eid];
+        const name = s?.attributes?.friendly_name || eid;
+        const st   = s?.state || '?';
+        html += `
+          <div class="entity-block">
+            <div class="eb-head">
+              <span class="state-badge ${stateClass(st)}" style="margin:0;font-size:10px;">${esc(st)}</span>
+              <span class="eb-name">${esc(name)}</span>
+            </div>
+            <div class="eb-eid">${esc(eid)}</div>
+            ${attrsHtml(s)}
+            ${ctrlHtml(eid)}
+          </div>`;
+      });
+    } else {
+      const s = states[nodeId];
+      html += attrsHtml(s);
+      html += ctrlHtml(nodeId);
+    }
+
+    html += linksHtml(nodeId);
+    content.innerHTML = html;
+
+    // Navigation via clic sur un lien
+    content.querySelectorAll('[data-nodeid]').forEach(el => {
+      el.addEventListener('click', () => openSidebar(el.dataset.nodeid));
+    });
+
+    document.getElementById('sidebar').classList.add('open');
+  }
+
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    currentSidebarNodeId = null;
+  }
+
+  /* ─── INIT ─── */
+  document.getElementById('auth-save').onclick = () => {
+    const base  = document.getElementById('base-url-input').value.trim().replace(/\/$/,'');
+    const token = document.getElementById('token-input').value.trim();
+    if (base)  setBaseUrl(base);
+    if (token) setToken(token);
+    document.getElementById('token-input').value = '';
+    showAuth(false);
+    if (ws) ws.close();
+    wsConnect();
+  };
+
+  (() => {
+    const stored = localStorage.getItem(STORAGE_BASE);
+    if (stored) document.getElementById('base-url-input').value = stored;
+    if (getToken()) { showAuth(false); wsConnect(); }
+    else { showAuth(true); }
+  })();
+
+})();
+</script>
+</body>
+</html>

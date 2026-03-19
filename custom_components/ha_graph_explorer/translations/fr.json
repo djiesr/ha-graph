@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "HA Graph Explorer",
+        "description": "Active l’enregistrement côté serveur pour le panneau graphe (token, URL de base, layout) via `/api/ha_graph_explorer/config`. Ajoutez la carte Page Web vers `/local/ha-graph/ha-graph.html` si ce n’est pas déjà fait."
+      }
+    },
+    "abort": {
+      "already_configured": "Déjà configuré. Une seule instance est autorisée."
+    }
+  }
+}
