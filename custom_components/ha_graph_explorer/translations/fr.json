@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "HA Graph Explorer",
-        "description": "Active l’enregistrement côté serveur pour le panneau graphe (token, URL de base, layout) via `/api/ha_graph_explorer/config`. Ajoutez la carte Page Web vers `/local/ha-graph/ha-graph.html` si ce n’est pas déjà fait."
+        "description": "Active l’enregistrement côté serveur pour le panneau graphe (token, URL de base, layout) via `/api/ha_graph_explorer/config`. Ajoutez une carte Page Web vers `/local/ha-graph/ha-graph-3d.html` (3D) ou `/local/ha-graph/ha-graph-2d.html` (2D)."
       }
     },
     "abort": {

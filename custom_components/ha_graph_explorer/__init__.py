@@ -94,6 +94,10 @@ class HaGraphExplorerConfigView(HomeAssistantView):
                     current["base_url"] = bu
             if "layout" in body:
                 current["layout"] = body["layout"]
+            if "layout_2d" in body:
+                current["layout_2d"] = body["layout_2d"]
+            if "layout_3d" in body:
+                current["layout_3d"] = body["layout_3d"]
             _write_store(path, current)
 
         await self.hass.async_add_executor_job(merge_and_write)

@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "HA Graph Explorer",
-        "description": "Enables server-side storage for the graph panel (token, base URL, layout) at `/api/ha_graph_explorer/config`. Add the Web Page card pointing to `/local/ha-graph/ha-graph.html` if you have not already."
+        "description": "Enables server-side storage for the graph panel (token, base URL, layout) at `/api/ha_graph_explorer/config`. Add a Web Page card to `/local/ha-graph/ha-graph-3d.html` (3D) or `/local/ha-graph/ha-graph-2d.html` (2D)."
       }
     },
     "abort": {
