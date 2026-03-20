@@ -15,7 +15,10 @@ Graph visualization panel for **Home Assistant**: devices, automations, scripts,
 - **Optional integration** (`ha_graph_explorer`): **config flow** (no YAML required) — saves token, base URL and graph layout under `config/ha_graph_explorer.json` and exposes `GET/POST /api/ha_graph_explorer/config`
 - **Server sync indicator**: colored pill in the **toolbar** and on the **login panel** (green = sync OK, amber = integration present but token/session needed, red = integration missing / 404, etc.) with tooltips; refreshes when you tab back to the page
 
+2D
 ![Screenshot](https://github.com/user-attachments/assets/88c8ebd4-b681-47d7-92eb-a3c176c79d9b)
+3D
+<img width="1230" height="768" alt="image" src="https://github.com/user-attachments/assets/bbfa67e7-8722-47ea-821a-d0aa733a726e" />
 
 ## Requirements
 
@@ -110,7 +113,11 @@ Panneau de visualisation en graphe pour **Home Assistant** : **2D** (Cytoscape +
 - **Intégration optionnelle** `ha_graph_explorer` : **config flow** (sans YAML obligatoire) — données dans `config/ha_graph_explorer.json`, API `GET/POST /api/ha_graph_explorer/config`
 - **Indicateur de sync** : pastille colorée dans la **barre d’outils** et sur le **panneau de connexion** (vert = sync OK, ambre = intégration OK mais token/session requis, rouge = pas d’intégration / 404, etc.), infobulle détaillée ; rafraîchissement au retour sur l’onglet
 
+2D
 ![Capture](https://github.com/user-attachments/assets/88c8ebd4-b681-47d7-92eb-a3c176c79d9b)
+3D
+<img width="1230" height="768" alt="image" src="https://github.com/user-attachments/assets/7cf148c0-7420-461d-81e4-cf98a77519ea" />
+
 
 ### Prérequis
 
