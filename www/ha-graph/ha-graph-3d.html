@@ -1031,13 +1031,25 @@ import { forceSimulation, forceLink, forceManyBody, forceCenter } from 'https://
   }
 
   async function syncFromServer() {
-    const auth = getEffectiveAuthToken();
-    if (!auth) return;
     try {
-      const r = await fetch(API_CONFIG_URL, {
-        headers: { Authorization: 'Bearer ' + auth },
-        credentials: 'same-origin'
+      /* 1) Session HA (cookie) — même sans token graphe / OAuth dans localStorage (autre URL ou navigateur). */
+      let r = await fetch(API_CONFIG_URL, {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' }
       });
+      if (r.status === 404) return;
+      if (!r.ok) {
+        const auth = getEffectiveAuthToken();
+        if (!auth) return;
+        if (r.status !== 401 && r.status !== 403) return;
+        r = await fetch(API_CONFIG_URL, {
+          credentials: 'same-origin',
+          headers: {
+            Authorization: 'Bearer ' + auth,
+            Accept: 'application/json'
+          }
+        });
+      }
       if (r.status === 404) return;
       if (!r.ok) return;
       const data = await r.json();
