@@ -5,386 +5,43 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HA Graph Explorer — 3D</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="ha-graph-core.css">
   <style>
-    :root {
-      --bg: #1a1a2e;
-      --surface: #16213e;
-      --accent: #0f3460;
-      --text: #e8e8e8;
-      --text-dim: #a0a0a0;
-      --on: #a8e6cf;
-      --off: #6c757d;
-      --unavailable: #e94560;
-      --edge-trigger: #ff9a8b;
-      --edge-action: #ffecd2;
-      --edge-member: #a8e6cf;
-      --edge-target: #d4a5a5;
-      --shadow: rgba(0,0,0,0.4);
+    /* ── 3D-specific layout ───────────────────────────────────────────────── */
+    #main-split { display: flex; flex: 1; min-height: 0; }
+    #graph-container { flex: 1; position: relative; min-width: 0; min-height: 0; }
+    #graph-container canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    /* ── Sidebar (3D: inline panel, collapses to width:0) ─────────────────── */
+    #sidebar {
+      width: 320px; max-width: 40vw; flex-shrink: 0; align-self: stretch;
+      background: var(--surface); border-left: 1px solid var(--accent);
+      box-shadow: -4px 0 20px var(--shadow);
+      overflow-y: auto; padding: 16px; position: relative;
     }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      overflow: hidden;
-      height: 100vh;
-    }
-    #app {
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-    }
-    /* Toolbar */
-    #toolbar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
-      background: var(--surface);
-      border-bottom: 1px solid var(--accent);
-      flex-shrink: 0;
-    }
-    #toolbar input[type="text"] {
-      background: var(--accent);
-      border: 1px solid transparent;
-      color: var(--text);
-      padding: 6px 10px;
-      border-radius: 6px;
-      width: 200px;
-      transition: border-color 0.2s;
-    }
-    #toolbar input::placeholder { color: var(--text-dim); }
-    #toolbar input:focus {
-      outline: none;
-      border-color: var(--on);
-    }
-    #toolbar label {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      cursor: pointer;
-      font-size: 13px;
-      color: var(--text-dim);
-    }
-    #toolbar label input { width: auto; margin: 0; }
-    #domain-filters {
-      display: inline-flex;
-      flex-direction: row;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 8px 12px;
-    }
-    #toolbar button {
-      background: var(--accent);
-      border: 1px solid transparent;
-      color: var(--text);
-      padding: 6px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 13px;
-      transition: background 0.2s, border-color 0.2s;
-    }
-    #toolbar button:hover {
-      background: #1a3a5c;
-      border-color: var(--text-dim);
-    }
-    #toolbar button.primary { background: #0f3460; color: var(--on); }
-    .lang-btn { min-width: 28px; padding: 4px 8px; font-size: 12px; }
-    .lang-btn.active { background: var(--on); color: var(--bg); border-color: var(--on); }
-    .toolbar-view-link {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 36px;
-      padding: 6px 10px;
-      font-size: 12px;
-      font-weight: 600;
-      border-radius: 6px;
-      border: 1px solid var(--on);
-      background: transparent;
-      color: var(--on);
-      text-decoration: none;
-      transition: background 0.2s, color 0.2s;
-    }
-    .toolbar-view-link:hover {
-      background: rgba(168, 230, 207, 0.15);
-      color: var(--text);
-    }
-    /* Graphe 3D (gauche) + panneau détail (droite) */
-    #main-split {
-      display: flex;
-      flex: 1;
-      min-height: 0;
-    }
-    #graph-container {
-      flex: 1;
-      position: relative;
-      min-width: 0;
-      min-height: 0;
-    }
+    #sidebar:not(.open) { width:0 !important; min-width:0; padding:0; border:none; overflow:hidden; box-shadow:none; }
+    #sidebar.open { width: 320px; max-width: 40vw; }
+    /* ── Sliders ──────────────────────────────────────────────────────────── */
     .graph-toolbar-sliders {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-      font-size: 12px;
-      color: var(--text-dim);
+      display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      font-size: 12px; color: var(--text-dim);
     }
     .graph-toolbar-sliders label {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      cursor: pointer;
-      white-space: nowrap;
+      display: inline-flex; align-items: center; gap: 5px; cursor: pointer; white-space: nowrap;
     }
-    .graph-toolbar-sliders input[type="range"] {
-      width: 86px;
-      vertical-align: middle;
-      accent-color: var(--on);
-    }
-    .toolbar-debug-cam {
-      align-self: flex-end;
-      text-align: right;
-      max-width: min(320px, 42vw);
-    }
-    .toolbar-debug-cam label {
-      font-size: 11px;
-      color: var(--text-dim);
-      cursor: pointer;
-      user-select: none;
-    }
+    .graph-toolbar-sliders input[type="range"] { width: 86px; vertical-align: middle; accent-color: var(--on); }
+    /* ── Debug camera panel ───────────────────────────────────────────────── */
+    .toolbar-debug-cam { align-self: flex-end; text-align: right; max-width: min(320px, 42vw); }
+    .toolbar-debug-cam label { font-size: 11px; color: var(--text-dim); cursor: pointer; user-select: none; }
     #debug-cam-panel {
-      display: none;
-      margin: 4px 0 0;
-      padding: 6px 8px;
-      max-height: 140px;
-      overflow: auto;
-      font-size: 10px;
-      line-height: 1.35;
+      display: none; margin: 4px 0 0; padding: 6px 8px;
+      max-height: 140px; overflow: auto;
+      font-size: 10px; line-height: 1.35;
       font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
-      color: var(--text-dim);
-      background: rgba(15, 52, 96, 0.55);
-      border: 1px solid var(--accent);
-      border-radius: 6px;
-      text-align: left;
-      white-space: pre-wrap;
-      word-break: break-all;
+      color: var(--text-dim); background: rgba(15,52,96,0.55);
+      border: 1px solid var(--accent); border-radius: 6px;
+      text-align: left; white-space: pre-wrap; word-break: break-all;
     }
     #debug-cam-panel.visible { display: block; }
-    #graph-container canvas {
-      display: block;
-      width: 100%;
-      height: 100%;
-      touch-action: none;
-    }
-    /* Sidebar */
-    #sidebar {
-      width: 320px;
-      max-width: 40vw;
-      flex-shrink: 0;
-      align-self: stretch;
-      background: var(--surface);
-      border-left: 1px solid var(--accent);
-      box-shadow: -4px 0 20px var(--shadow);
-      overflow-y: auto;
-      padding: 16px;
-      position: relative;
-    }
-    #sidebar:not(.open) {
-      width: 0 !important;
-      min-width: 0;
-      padding: 0;
-      border: none;
-      overflow: hidden;
-      box-shadow: none;
-    }
-    #sidebar.open {
-      width: 320px;
-      max-width: 40vw;
-    }
-    #sidebar h2 {
-      margin: 0 0 12px;
-      font-size: 18px;
-      color: var(--text);
-      word-break: break-all;
-    }
-    #sidebar .state-badge {
-      display: inline-block;
-      padding: 4px 10px;
-      border-radius: 20px;
-      font-size: 13px;
-      margin-bottom: 12px;
-      transition: background-color 0.3s, color 0.3s;
-    }
-    #sidebar .state-badge.on  { background: var(--on); color: #1a1a2e; }
-    #sidebar .state-badge.off { background: var(--off); color: #fff; }
-    #sidebar .state-badge.unavailable { background: var(--unavailable); color: #fff; }
-    #sidebar .attr-list { font-size: 13px; color: var(--text-dim); }
-    #sidebar .attr-list dt { margin-top: 8px; }
-    #sidebar .links-section { margin-top: 16px; }
-    #sidebar .links-section h3 { font-size: 14px; margin-bottom: 8px; color: var(--text-dim); }
-    #sidebar .links-section ul { margin: 0; padding-left: 20px; }
-    #sidebar .sidebar-controls { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
-    #sidebar .sidebar-controls button {
-      padding: 6px 12px;
-      border-radius: 6px;
-      border: 1px solid var(--accent);
-      background: var(--accent);
-      color: var(--text);
-      cursor: pointer;
-      font-size: 13px;
-    }
-    #sidebar .sidebar-controls button:hover { background: #1a3a5c; border-color: var(--text-dim); }
-    #sidebar .sidebar-controls button.primary { background: var(--on); color: var(--bg); border-color: var(--on); }
-    #sidebar .sidebar-controls button.primary:hover { opacity: 0.9; }
-    #sidebar .entity-block {
-      margin-top: 12px;
-      padding: 10px;
-      background: var(--accent);
-      border-radius: 8px;
-      font-size: 13px;
-    }
-    #sidebar .entity-block .entity-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
-    #sidebar .entity-block .entity-attr { margin-top: 6px; color: var(--text-dim); font-size: 12px; }
-    #sidebar-close {
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      background: transparent;
-      border: none;
-      color: var(--text-dim);
-      cursor: pointer;
-      font-size: 20px;
-      padding: 4px;
-    }
-    #sidebar-close:hover { color: var(--text); }
-    /* Auth panel */
-    #auth-panel {
-      position: fixed;
-      inset: 0;
-      background: var(--bg);
-      z-index: 100;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-    #auth-panel.hidden { display: none; }
-    #auth-panel .card {
-      background: var(--surface);
-      padding: 24px;
-      border-radius: 12px;
-      max-width: 400px;
-      width: 100%;
-      border: 1px solid var(--accent);
-    }
-    #auth-panel label { display: block; margin-bottom: 8px; font-size: 13px; color: var(--text-dim); }
-    #auth-panel input {
-      width: 100%;
-      padding: 10px;
-      background: var(--accent);
-      border: 1px solid transparent;
-      border-radius: 6px;
-      color: var(--text);
-      margin-bottom: 16px;
-    }
-    #auth-panel input:focus { outline: none; border-color: var(--on); }
-    #auth-panel button {
-      width: 100%;
-      padding: 10px;
-      background: var(--on);
-      color: var(--bg);
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: 600;
-    }
-    #auth-panel button:hover { opacity: 0.9; }
-    #auth-panel button.secondary { background: var(--accent); color: var(--text); }
-    #auth-panel button.secondary:hover { background: #1a3a5c; }
-    #auth-panel .hint { font-size: 12px; color: var(--text-dim); margin-top: 12px; }
-    /* Status */
-    #status {
-      padding: 4px 12px;
-      font-size: 12px;
-      color: var(--text-dim);
-    }
-    .status-ok { color: var(--on); }
-    .status-warn { color: #e8c547; }
-    .status-err { color: var(--unavailable); }
-    #auth-save-result { min-height: 1.35em; margin-top: 10px; font-size: 13px; }
-    #auth-save-result.save-result--ok { color: var(--on); }
-    #auth-save-result.save-result--warn { color: #e8c547; }
-    #auth-save-result.save-result--err { color: var(--unavailable); }
-    #progress-bar {
-      height: 4px;
-      background: var(--accent);
-      width: 100%;
-      margin-top: 4px;
-      border-radius: 2px;
-      overflow: hidden;
-    }
-    #progress-bar .fill {
-      height: 100%;
-      background: var(--on);
-      border-radius: 2px;
-      transition: width 0.25s ease;
-      width: 0%;
-    }
-    #progress-text {
-      font-size: 11px;
-      color: var(--text-dim);
-      margin-top: 2px;
-    }
-    /* Server integration sync indicator */
-    .server-sync-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-      font-weight: 600;
-      padding: 5px 12px;
-      border-radius: 999px;
-      border: 1px solid var(--accent);
-      background: var(--accent);
-      color: var(--text);
-      max-width: min(280px, 42vw);
-      line-height: 1.25;
-    }
-    .server-sync-pill .server-sync-dot {
-      flex-shrink: 0;
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      box-shadow: 0 0 0 2px rgba(0,0,0,0.2);
-    }
-    .server-sync-pill .server-sync-label { overflow: hidden; text-overflow: ellipsis; }
-    .server-sync--checking .server-sync-dot {
-      background: var(--text-dim);
-      animation: server-sync-pulse 1.1s ease-in-out infinite;
-    }
-    .server-sync--ok .server-sync-dot { background: var(--on); }
-    .server-sync--ok { border-color: rgba(168, 230, 207, 0.45); color: var(--on); }
-    .server-sync--api_only .server-sync-dot { background: #e8c547; }
-    .server-sync--api_only { border-color: rgba(232, 197, 71, 0.5); color: #f5e6a6; }
-    .server-sync--absent .server-sync-dot { background: var(--unavailable); }
-    .server-sync--absent { border-color: rgba(233, 69, 96, 0.45); color: #ff9aab; }
-    .server-sync--error .server-sync-dot { background: #c77dff; }
-    .server-sync--error { border-color: rgba(199, 125, 255, 0.4); color: #e0c4ff; }
-    @keyframes server-sync-pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.45; transform: scale(0.85); }
-    }
-    #auth-panel .auth-head {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 8px;
-    }
-    #auth-panel .auth-head h2 { margin: 0; flex: 1; min-width: 0; }
-    #auth-panel [data-server-sync-pill] { flex-shrink: 0; max-width: 160px; font-size: 11px; padding: 4px 10px; }
   </style>
 </head>
 <body>
@@ -398,10 +55,10 @@
             <span class="server-sync-label">…</span>
           </span>
         </div>
-        <p style="color: var(--text-dim); font-size: 14px; margin-top:0;" data-i18n="auth_subtitle">Paste your token.</p>
+        <p style="color:var(--text-dim);font-size:14px;margin-top:0;" data-i18n="auth_subtitle"></p>
         <label for="base-url-input" data-i18n="auth_baseUrl">Base URL (optional)</label>
         <input type="text" id="base-url-input" data-i18n-placeholder="auth_baseUrlPlaceholder" autocomplete="off">
-        <p class="hint" style="margin-top:0;" data-i18n="auth_baseUrlHint">Laissez vide pour utiliser l’URL actuelle (ex. si ouvert depuis HA).</p>
+        <p class="hint" style="margin-top:0;" data-i18n="auth_baseUrlHint"></p>
         <label for="token-input" data-i18n="auth_token">Access token</label>
         <input type="password" id="token-input" data-i18n-placeholder="auth_tokenPlaceholder" autocomplete="off">
         <button type="button" id="auth-save" data-i18n="auth_save">Save and connect</button>
@@ -409,18 +66,22 @@
         <p id="auth-save-result" class="hint" role="status" aria-live="polite"></p>
         <p class="hint" data-i18n="auth_tokenHint"></p>
         <p class="hint" style="margin-top:8px;" data-i18n="auth_serverSyncHint"></p>
-        <hr style="border:none; border-top:1px solid var(--accent); margin:16px 0;">
-        <p style="font-size:13px; color:var(--text-dim); margin-bottom:8px;" data-i18n="backup_heading"></p>
-        <label style="display:block; margin-bottom:8px;"><input type="checkbox" id="export-include-token"> <span data-i18n="backup_includeToken">Include token</span></label>
-        <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+        <hr style="border:none;border-top:1px solid var(--accent);margin:16px 0;">
+        <p style="font-size:13px;color:var(--text-dim);margin-bottom:8px;" data-i18n="backup_heading"></p>
+        <label style="display:block;margin-bottom:8px;"><input type="checkbox" id="export-include-token"> <span data-i18n="backup_includeToken">Include token</span></label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
           <button type="button" id="btn-export-backup" data-i18n="backup_export">Export backup</button>
           <button type="button" id="btn-import-backup" data-i18n="backup_import">Restore backup</button>
           <input type="file" id="import-backup-file" accept=".json,application/json" style="display:none;">
         </div>
       </div>
     </div>
+
     <div id="toolbar">
-      <span id="lang-switcher" style="margin-right:4px;"><button type="button" class="lang-btn" data-lang="en">EN</button><button type="button" class="lang-btn" data-lang="fr">FR</button></span>
+      <span id="lang-switcher" style="margin-right:4px;">
+        <button type="button" class="lang-btn" data-lang="en">EN</button>
+        <button type="button" class="lang-btn" data-lang="fr">FR</button>
+      </span>
       <a href="ha-graph-2d.html" class="toolbar-view-link" style="margin-right:4px;" data-i18n="view_2d" data-i18n-title="view_2d_title">2D</a>
       <input type="text" id="search" data-i18n-placeholder="search_placeholder">
       <button type="button" id="btn-reset-layout" data-i18n-title="btn_reset_layout_title"><span data-i18n="btn_reset_layout">Reset layout</span></button>
@@ -428,6 +89,8 @@
       <label><input type="checkbox" id="orphans"> <span data-i18n="orphans_label">Show orphans</span></label>
       <label data-i18n-title="labels_all_title"><input type="checkbox" id="labels-show-all"> <span data-i18n="labels_all">All names</span></label>
       <label data-i18n-title="auto_rotate_title"><input type="checkbox" id="auto-rotate"> <span data-i18n="auto_rotate">Auto spin</span></label>
+      <button type="button" id="live-mode-btn" class="live-mode-btn" data-i18n="live_mode" data-i18n-title="live_mode_title">Live</button>
+      <button type="button" id="btn-legend" data-i18n-title="legend_title" style="font-size:12px;padding:5px 10px;">⬛ <span data-i18n="legend_title">Legend</span></button>
       <span id="domain-filters"></span>
       <span class="graph-toolbar-sliders" id="graph-3d-sliders">
         <label data-i18n-title="slider_shapes_title"><span data-i18n="slider_shapes">Shapes</span>
@@ -438,13 +101,13 @@
         </label>
       </span>
       <button type="button" id="btn-backup" data-i18n-title="btn_backup_title"><span data-i18n="btn_backup">Backup</span></button>
-      <span style="margin-left:auto; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+      <span style="margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
         <span class="server-sync-pill server-sync--checking" data-server-sync-pill role="status" aria-live="polite">
           <span class="server-sync-dot" aria-hidden="true"></span>
           <span class="server-sync-label">…</span>
         </span>
         <span id="status" data-i18n="status_disconnected">Disconnected</span>
-        <div id="progress-bar" style="display:none; width:160px;"><div class="fill"></div></div>
+        <div id="progress-bar" style="display:none;width:160px;"><div class="fill"></div></div>
         <span id="progress-text"></span>
         <div class="toolbar-debug-cam">
           <label data-i18n-title="debug_cam_title">
@@ -455,8 +118,10 @@
         </div>
       </span>
     </div>
+
+    <div id="ha-legend-panel" class="ha-legend hidden"></div>
     <div id="main-split">
-      <div id="graph-container"></div>
+      <div id="graph-container">
       <aside id="sidebar" class="open">
         <button type="button" id="sidebar-close" aria-label="Close" data-i18n-aria="close_aria">&times;</button>
         <div id="sidebar-content"></div>
@@ -464,13 +129,9 @@
     </div>
   </div>
 
-  <!-- OrbitControls (examples/jsm) imports the bare specifier "three"; browsers need an import map. -->
+  <!-- Three.js needs the "three" bare specifier resolved via import map -->
   <script type="importmap">
-  {
-    "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
-    }
-  }
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
   </script>
   <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
@@ -478,2434 +139,1082 @@ import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/exampl
 import { CSS2DRenderer, CSS2DObject } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/renderers/CSS2DRenderer.js';
 import { forceSimulation, forceLink, forceManyBody, forceCenter } from 'https://cdn.jsdelivr.net/npm/d3-force-3d@3.0.5/+esm';
 
-  // Sources de données (le backend HA lit les .storage et expose via WebSocket) :
-  // .storage/core.device_registry  → config/device_registry/list
-  // .storage/core.entity_registry   → config/entity_registry/list
-  // .storage/automations (ou YAML)  → automation/config { entity_id } par automation
-  // .storage/scripts (ou YAML)     → script/config { entity_id } par script (si exposé)
-  // .storage/scenes (ou YAML)      → get_states (entités scene.*) + attributs entity_id/entities
-  // On n'a pas accès direct aux fichiers .storage ; on utilise ces API.
+import {
+  STORAGE_LAYOUT_3D, EDGE_COLORS,
+  t, applyI18n,
+  readStoredLayoutRaw, layoutObjectHasKeys, schedulePushLayoutToServer,
+  states, graphData,
+  entityToNodeId, deviceAggregatedState, entityDomain,
+  getDomainColor, liveMode,
+  openSidebar, buildDomainFilters, buildLegend,
+  registerRenderer, bindCommonUI, initAuthPanel
+} from './ha-graph-core.js';
 
-  const STORAGE_TOKEN = 'ha_graph_token';
-  const STORAGE_LAYOUT_2D = 'ha_graph_layout_2d';
-  const STORAGE_LAYOUT_3D = 'ha_graph_layout_3d';
-  /** Ancienne clé unique ; migrée une fois vers `_2d` / `_3d`, plus utilisée pour l’affichage. */
-  const STORAGE_LAYOUT_LEGACY = 'ha_graph_layout';
+// ── 3D-specific storage keys ──────────────────────────────────────────────────
+const STORAGE_3D_SHAPE_SCALE    = 'ha_graph_3d_shape_scale';
+const STORAGE_3D_LABEL_PX       = 'ha_graph_3d_label_px';
+const STORAGE_3D_LABELS_SHOW_ALL= 'ha_graph_3d_labels_show_all';
+const STORAGE_3D_DEBUG_CAM      = 'ha_graph_3d_debug_cam';
+const STORAGE_3D_AUTO_ROTATE    = 'ha_graph_3d_auto_rotate';
 
-  function layoutObjectHasKeys(obj) {
-    return obj && typeof obj === 'object' && Object.keys(obj).length > 0;
+/** OrbitControls autoRotate speed (lower = slower). */
+const AUTO_ROTATE_SPEED = 0.5;
+/** Above this node count: labels only on hover by default (CSS2D × 500 nodes = slow browser). */
+const LARGE_GRAPH_LABEL_THRESHOLD = 160;
+
+// ── 3D scene state ────────────────────────────────────────────────────────────
+const graph3d = {
+  renderer: null, scene: null, camera: null, controls: null, simulation: null,
+  nodeGroup: null, edgeGroup: null,
+  idToMesh: new Map(), idToSimNode: new Map(),
+  simNodes: [], simLinks: [],
+  rafId: null, raycaster: null, pointerNdc: new THREE.Vector2(),
+  edgeGeom: null, edgeLine: null, resizeHandler: null,
+  hoveredId: null, layoutSaveTimer: null,
+  draggingNodeId: null, dragIsActive: false,
+  dragPlane: null, dragPlaneAnchor: null, dragHit: null, dragTmpDir: null,
+  dragStartClient: null, suppressNextClick: false,
+  pendingSelectNodeId: null, armDragNodeId: null,
+  css2dRenderer: null, idToLabel: new Map(),
+  shapeSizeFactor: 1, labelFontPx: 11,
+  floatingLabel: null, pickRafId: null, lastPickEv: null,
+  edgeBoundsStale: true, _floatLabelNodeId: null,
+  _safeWheelHandler: null, _wheelZoomUsesSafeFix: false,
+  activeAnimations: [],   // { nodeId, type:'flash'|'pulse', t0, duration }
+  activeParticles:  []    // { src, tgt, t0, duration, mesh }
+};
+
+const _wheelZoomDir = new THREE.Vector3();
+
+// ── Wheel-zoom DPR=0 fix (OrbitControls r160 bug) ────────────────────────────
+/** OrbitControls getZoomScale divides by (100 * (devicePixelRatio|0)) → 0 if DPR∈(0,1), zoom broken. */
+function wheelZoomThreeJsBroken() {
+  const dpr = Number(window.devicePixelRatio);
+  return ((Number.isFinite(dpr) ? dpr : 1) | 0) === 0;
+}
+
+function onGraphSafeWheel(ev) {
+  if (!graph3d.controls || !graph3d.camera || !graph3d.controls.enabled) return;
+  if (!graph3d.camera.isPerspectiveCamera) return;
+  if (graph3d.pendingSelectNodeId || graph3d.draggingNodeId) return;
+  ev.preventDefault();
+  const ctl = graph3d.controls, cam = graph3d.camera, tgt = ctl.target;
+  _wheelZoomDir.subVectors(cam.position, tgt);
+  const dist = _wheelZoomDir.length();
+  if (dist < 1e-5) return;
+  _wheelZoomDir.divideScalar(dist);
+  let deltaMag = Math.abs(ev.deltaY);
+  if (ev.deltaMode === 1) deltaMag *= 16;
+  else if (ev.deltaMode === 2) deltaMag *= 100;
+  const rawDpr = Number(window.devicePixelRatio);
+  const safeDpr = Math.max(0.25, Math.min(4, (Number.isFinite(rawDpr) && rawDpr > 0) ? rawDpr : 1));
+  const normalized = Math.min(12, deltaMag / (100 * safeDpr));
+  let dollyScale = Math.pow(0.95, ctl.zoomSpeed * normalized);
+  dollyScale = THREE.MathUtils.clamp(dollyScale, 0.04, 0.9995);
+  const newDist = THREE.MathUtils.clamp(
+    ev.deltaY > 0 ? dist / dollyScale : dist * dollyScale,
+    ctl.minDistance, ctl.maxDistance
+  );
+  cam.position.copy(tgt).addScaledVector(_wheelZoomDir, newDist);
+  ctl.update();
+}
+
+function detachGraphSafeWheel() {
+  const canvas = graph3d.renderer?.domElement;
+  if (canvas && graph3d._safeWheelHandler) canvas.removeEventListener('wheel', graph3d._safeWheelHandler);
+  graph3d._safeWheelHandler = null;
+  graph3d._wheelZoomUsesSafeFix = false;
+}
+
+function attachGraphSafeWheelIfNeeded() {
+  detachGraphSafeWheel();
+  if (!graph3d.renderer || !graph3d.controls) return;
+  if (!wheelZoomThreeJsBroken()) { graph3d.controls.enableZoom = true; return; }
+  graph3d.controls.enableZoom = false;
+  graph3d._wheelZoomUsesSafeFix = true;
+  graph3d._safeWheelHandler = onGraphSafeWheel;
+  graph3d.renderer.domElement.addEventListener('wheel', graph3d._safeWheelHandler, { passive: false });
+}
+
+// ── Node colour (on/off/unavailable → THREE.Color) ────────────────────────────
+function nodeColor(state) {
+  if (state === 'unavailable') return new THREE.Color(0xe94560);
+  if (state === 'on')          return new THREE.Color(0xa8e6cf);
+  return new THREE.Color(0x6c757d);
+}
+
+// Priority order for device node domain selection
+const DOMAIN_PRIORITY_3D = ['light','switch','cover','lock','climate','media_player','fan','binary_sensor','input_boolean','automation','script','scene','sensor'];
+
+function _bestDeviceColor3d(entityIds) {
+  let bestPrio = Infinity, bestEid = null;
+  for (const eid of (entityIds || [])) {
+    const s = states[eid];
+    if (!s || s.state === 'unavailable') continue;
+    const dom = entityDomain(eid);
+    const prio = DOMAIN_PRIORITY_3D.indexOf(dom);
+    if (s.state === 'on' && prio >= 0 && prio < bestPrio) { bestPrio = prio; bestEid = eid; }
   }
-
-  function readStoredLayoutRaw(storageKey) {
-    try {
-      const raw = localStorage.getItem(storageKey);
-      return raw ? JSON.parse(raw) : null;
-    } catch (e) {
-      return null;
-    }
+  if (bestEid) return getDomainColor(entityDomain(bestEid), 'on', states[bestEid]?.attributes);
+  let fallbackEid = null, fallbackPrio = Infinity;
+  for (const eid of (entityIds || [])) {
+    const prio = DOMAIN_PRIORITY_3D.indexOf(entityDomain(eid));
+    if (prio >= 0 && prio < fallbackPrio) { fallbackPrio = prio; fallbackEid = eid; }
   }
-
-  function layoutTo2d(layoutObj) {
-    if (!layoutObj || typeof layoutObj !== 'object') return {};
-    const o = {};
-    Object.keys(layoutObj).forEach(id => {
-      const p = layoutObj[id];
-      if (p && Number.isFinite(Number(p.x)) && Number.isFinite(Number(p.y))) {
-        o[id] = { x: Number(p.x), y: Number(p.y) };
-      }
-    });
-    return o;
+  if (fallbackEid) {
+    const s = states[fallbackEid];
+    return getDomainColor(entityDomain(fallbackEid), s?.state ?? 'off', s?.attributes);
   }
+  return '#455a64';
+}
 
-  /** Une fois au chargement : si seule la clé legacy existe, on la duplique en 2D+3D ; sinon on ne remplit jamais une dimension vide à partir du legacy si l’autre a déjà des positions. */
-  function ensureLayoutsMigratedFromLegacy() {
-    try {
-      const legacy = readStoredLayoutRaw(STORAGE_LAYOUT_LEGACY);
-      if (!layoutObjectHasKeys(legacy)) return;
-      const l2 = readStoredLayoutRaw(STORAGE_LAYOUT_2D);
-      const l3 = readStoredLayoutRaw(STORAGE_LAYOUT_3D);
-      const has2 = layoutObjectHasKeys(l2);
-      const has3 = layoutObjectHasKeys(l3);
-      if (!has2 && !has3) {
-        localStorage.setItem(STORAGE_LAYOUT_3D, JSON.stringify(legacy));
-        localStorage.setItem(STORAGE_LAYOUT_2D, JSON.stringify(layoutTo2d(legacy)));
-      }
-    } catch (e) { /* ignore */ }
-  }
+/** Returns a THREE.Color using getDomainColor when liveMode is on. */
+function nodeColorLive(nodeId, state) {
+  if (!liveMode) return nodeColor(state);
+  const node = graphData.nodes.find(n => n.id === nodeId);
+  if (!node) return new THREE.Color(getDomainColor('device', state));
+  if (node.domain === 'device') return new THREE.Color(_bestDeviceColor3d(node.entityIds));
+  const s = states[nodeId];
+  return new THREE.Color(getDomainColor(node.domain, state, s?.attributes || {}));
+}
 
-  function applyServerLayoutsToLocalStorage(data) {
-    if (!data || typeof data !== 'object') return;
-    try {
-      if (data.layout_2d != null) localStorage.setItem(STORAGE_LAYOUT_2D, JSON.stringify(data.layout_2d));
-      if (data.layout_3d != null) localStorage.setItem(STORAGE_LAYOUT_3D, JSON.stringify(data.layout_3d));
-      if (data.layout != null && data.layout_2d == null && data.layout_3d == null) {
-        localStorage.setItem(STORAGE_LAYOUT_3D, JSON.stringify(data.layout));
-        localStorage.setItem(STORAGE_LAYOUT_2D, JSON.stringify(layoutTo2d(data.layout)));
-      }
-    } catch (e) { /* ignore */ }
-  }
-  const STORAGE_BASE = 'ha_graph_base';
-  const STORAGE_LANG = 'ha_graph_lang';
-  const STORAGE_3D_SHAPE_SCALE = 'ha_graph_3d_shape_scale';
-  const STORAGE_3D_LABEL_PX = 'ha_graph_3d_label_px';
-  const STORAGE_3D_LABELS_SHOW_ALL = 'ha_graph_3d_labels_show_all';
-  const STORAGE_3D_DEBUG_CAM = 'ha_graph_3d_debug_cam';
-  const STORAGE_3D_AUTO_ROTATE = 'ha_graph_3d_auto_rotate';
-  /** Vitesse OrbitControls.autoRotate (plus bas = plus lent). */
-  const AUTO_ROTATE_SPEED = 0.5;
-  /** Au-delà : noms uniquement au survol par défaut (CSS2D × 500 noeuds = navigateur saturé). */
-  const LARGE_GRAPH_LABEL_THRESHOLD = 160;
-
-  const L10N = {
-    en: {
-      auth_title: 'HA Graph Explorer v2',
-      auth_subtitle: 'Paste your Home Assistant long-lived access token.',
-      auth_baseUrl: 'Base URL (optional)',
-      auth_baseUrlPlaceholder: 'https://homeassistant.local:8123',
-      auth_baseUrlHint: 'Leave empty to use the current URL (e.g. when opened from HA).',
-      auth_token: 'Access token',
-      auth_tokenPlaceholder: 'eyJhbGc...',
-      auth_save: 'Save and connect',
-      auth_close: 'Close',
-      auth_tokenHint: 'Profile → Security → Long-lived access tokens → Create a token.',
-      auth_serverSyncHint: 'With the ha_graph_explorer integration enabled, token and layout are saved on your HA server after connect and reused on other devices (same HA user / session).',
-      backup_heading: 'Backup (so you don\'t lose settings when changing device or clearing cache)',
-      backup_includeToken: 'Include token in file',
-      backup_export: 'Export backup',
-      backup_import: 'Restore backup',
-      search_placeholder: 'Search (entity_id or name)...',
-      btn_reset_layout: 'Reset layout',
-      btn_reset_layout_title: 'Re-apply force-directed layout',
-      btn_center: 'Center',
-      btn_center_title: 'Center view on all nodes',
-      orphans_label: 'Show orphans',
-      btn_backup: 'Backup',
-      btn_backup_title: 'Backup or restore (export/import)',
-      view_2d: '2D',
-      view_2d_title: 'Open the 2D graph (Cytoscape + Cola)',
-      slider_shapes: 'Shapes',
-      slider_shapes_title: 'Scale of all 3D node shapes',
-      slider_text: 'Labels',
-      slider_text_title: 'Font size of names under nodes',
-      labels_all: 'All names',
-      labels_all_title: 'Off on large graphs (faster): show the name only for the node under the cursor',
-      debug_cam: 'Debug cam',
-      debug_cam_title: 'Show camera distance, target, angles, limits (for tuning zoom/pan)',
-      auto_rotate: 'Auto spin',
-      auto_rotate_title: 'Slowly orbit the camera around the scene (stops while you drag the view)',
-      status_disconnected: 'Disconnected',
-      status_connected: 'Connected',
-      status_loading: 'Loading...',
-      status_invalid_token: 'Invalid token',
-      status_connected_nodes: 'Connected ({n} nodes)',
-      status_error: 'Error: {msg}',
-      progress_fetching: 'Fetching entities and registries...',
-      progress_entities_devices: 'Entities: {entities} | Devices: {devices}',
-      progress_building: 'Building graph (devices)...',
-      progress_rendering: 'Rendering ({nodes} nodes, {edges} edges)...',
-      progress_devices: 'Devices: {current}/{total}',
-      progress_nodes_devices: 'Device nodes...',
-      progress_automations_scripts: 'Automation / script / group nodes...',
-      progress_links: 'Links (groups / scenes)...',
-      progress_automations_search: 'Fetching automations / scripts...',
-      links_title: 'Links ({n})',
-      controls_sensors: 'Controls & sensors',
-      no_entities: 'No entities',
-      node_unknown: 'Unknown node',
-      device_entities_count: 'Device · {n} entity(ies)',
-      btn_run: 'Run',
-      btn_trigger: 'Trigger',
-      btn_enable: 'Enable',
-      btn_disable: 'Disable',
-      btn_open: 'Open',
-      btn_close_cover: 'Close',
-      btn_stop: 'Stop',
-      btn_lock: 'Lock',
-      btn_unlock: 'Unlock',
-      on: 'On',
-      off: 'Off',
-      attr_state: 'State',
-      close_aria: 'Close',
-      invalid_backup: 'Invalid backup file.',
-      domain_device: 'Devices',
-      domain_automation: 'Automations',
-      domain_script: 'Scripts',
-      domain_scene: 'Scenes',
-      domain_group: 'Groups',
-      domain_zone: 'Zones',
-      reset_layout_confirm: 'Reset the graph layout? Manual positions will be replaced by an automatic layout.',
-      server_sync_checking: 'Checking…',
-      server_sync_checking_title: 'Testing the HA Graph Explorer API on this instance (/api/ha_graph_explorer/config).',
-      server_sync_ok: 'Server sync ON',
-      server_sync_ok_title: 'Integration is active: this browser can load and save token/layout on Home Assistant.',
-      server_sync_api_only: 'Integration OK — needs token',
-      server_sync_api_only_title: 'API is installed (401 = protected). Paste a long-lived token and save to enable server sync.',
-      server_sync_absent: 'No integration',
-      server_sync_absent_title: '404: add “HA Graph Explorer” under Settings → Devices & services, then restart if needed.',
-      server_sync_error: 'API unreachable',
-      server_sync_error_title: 'Network/CORS issue or wrong origin. Open this panel from your HA /local/… URL (same host:port as the API).',
-      config_save_ok_server: 'Settings saved on the Home Assistant server (ha_graph_explorer.json).',
-      config_save_local_only: 'Saved locally only — paste a long-lived token (or open from HA while logged in) to enable server sync.',
-      config_save_no_integration: 'Server sync skipped: API not found (404). Add the « HA Graph Explorer » integration, restart HA, then save again.',
-      config_save_denied: 'Server refused the save (401/403). Check your token or HA login.',
-      config_save_http: 'Server save failed (HTTP {status}).',
-      config_save_network: 'Cannot reach the API — open this page from your HA URL (/local/ha-graph/…) so requests go to the same host.',
-      config_save_aborted: 'Request was cancelled; try again.'
-    },
-    fr: {
-      auth_title: 'HA Graph Explorer v2',
-      auth_subtitle: 'Collez votre token d\'accès long durée Home Assistant.',
-      auth_baseUrl: 'URL de base (optionnel)',
-      auth_baseUrlPlaceholder: 'https://homeassistant.local:8123',
-      auth_baseUrlHint: 'Laissez vide pour utiliser l\'URL actuelle (ex. si ouvert depuis HA).',
-      auth_token: 'Token d\'accès',
-      auth_tokenPlaceholder: 'eyJhbGc...',
-      auth_save: 'Enregistrer et se connecter',
-      auth_close: 'Fermer',
-      auth_tokenHint: 'Profil HA → Sécurité → Tokens d\'accès → Créer un token.',
-      auth_serverSyncHint: 'Avec l\'intégration ha_graph_explorer, le token et le layout sont enregistrés sur votre serveur HA après connexion et réutilisés sur d\'autres appareils (même utilisateur / session HA).',
-      backup_heading: 'Sauvegarde (pour ne rien perdre en changeant d\'ordinateur ou en vidant le cache)',
-      backup_includeToken: 'Inclure le token dans le fichier',
-      backup_export: 'Exporter une sauvegarde',
-      backup_import: 'Restaurer une sauvegarde',
-      search_placeholder: 'Rechercher (entity_id ou nom)...',
-      btn_reset_layout: 'Réinitialiser layout',
-      btn_reset_layout_title: 'Réappliquer le layout force-directed',
-      btn_center: 'Centrer',
-      btn_center_title: 'Centrer la vue sur l\'ensemble des nœuds',
-      orphans_label: 'Afficher orphelins',
-      btn_backup: 'Sauvegarde',
-      btn_backup_title: 'Sauvegarder ou restaurer (export/import)',
-      view_2d: '2D',
-      view_2d_title: 'Ouvrir le graphe en 2D (Cytoscape + Cola)',
-      slider_shapes: 'Formes',
-      slider_shapes_title: 'Taille des formes 3D',
-      slider_text: 'Noms',
-      slider_text_title: 'Taille du texte sous les nœuds',
-      labels_all: 'Tous les noms',
-      labels_all_title: 'Désactivé par défaut sur gros graphes : afficher le nom seulement au survol (plus fluide)',
-      debug_cam: 'Debug caméra',
-      debug_cam_title: 'Distance, cible, angles, limites (réglage zoom / pan)',
-      auto_rotate: 'Rotation auto',
-      auto_rotate_title: 'Faire tourner lentement la caméra autour de la scène (pause pendant que vous faites glisser la vue)',
-      status_disconnected: 'Déconnecté',
-      status_connected: 'Connecté',
-      status_loading: 'Chargement...',
-      status_invalid_token: 'Token invalide',
-      status_connected_nodes: 'Connecté ({n} nœuds)',
-      status_error: 'Erreur : {msg}',
-      progress_fetching: 'Récupération entités et registres...',
-      progress_entities_devices: 'Entités : {entities} | Appareils : {devices}',
-      progress_building: 'Construction graphe (appareils)...',
-      progress_rendering: 'Rendu ({nodes} nœuds, {edges} liens)...',
-      progress_devices: 'Appareils : {current}/{total}',
-      progress_nodes_devices: 'Nœuds appareils...',
-      progress_automations_scripts: 'Nœuds automations / scripts / groupes...',
-      progress_links: 'Liens (groupes / scènes)...',
-      progress_automations_search: 'Recherche automations / scripts...',
-      links_title: 'Liens ({n})',
-      controls_sensors: 'Contrôles & capteurs',
-      no_entities: 'Aucune entité',
-      node_unknown: 'Nœud inconnu',
-      device_entities_count: 'Appareil · {n} entité(s)',
-      btn_run: 'Exécuter',
-      btn_trigger: 'Déclencher',
-      btn_enable: 'Activer',
-      btn_disable: 'Désactiver',
-      btn_open: 'Ouvrir',
-      btn_close_cover: 'Fermer',
-      btn_stop: 'Stop',
-      btn_lock: 'Verrouiller',
-      btn_unlock: 'Déverrouiller',
-      on: 'On',
-      off: 'Off',
-      attr_state: 'État',
-      close_aria: 'Fermer',
-      invalid_backup: 'Fichier de sauvegarde invalide.',
-      domain_device: 'Appareils',
-      domain_automation: 'Automations',
-      domain_script: 'Scripts',
-      domain_scene: 'Scènes',
-      domain_group: 'Groupes',
-      domain_zone: 'Zones',
-      reset_layout_confirm: 'Réinitialiser la disposition du graphe ? Les positions manuelles seront remplacées par une mise en page automatique.',
-      server_sync_checking: 'Vérification…',
-      server_sync_checking_title: 'Test de l’API HA Graph Explorer sur cette instance (/api/ha_graph_explorer/config).',
-      server_sync_ok: 'Sync serveur active',
-      server_sync_ok_title: 'Intégration active : ce navigateur peut lire/écrire token et layout sur Home Assistant.',
-      server_sync_api_only: 'Intégration OK — token requis',
-      server_sync_api_only_title: 'L’API est installée (401 = protégée). Collez un token longue durée et enregistrez pour activer la sync serveur.',
-      server_sync_absent: 'Pas d’intégration',
-      server_sync_absent_title: '404 : ajoutez « HA Graph Explorer » dans Paramètres → Appareils et services, redémarrez si besoin.',
-      server_sync_error: 'API inaccessible',
-      server_sync_error_title: 'Réseau/CORS ou mauvaise origine. Ouvrez ce panneau depuis l’URL HA /local/… (même hôte:port que l’API).',
-      config_save_ok_server: 'Réglages enregistrés sur le serveur Home Assistant (fichier ha_graph_explorer.json).',
-      config_save_local_only: 'Enregistré seulement dans ce navigateur : collez un token longue durée (ou ouvrez la page depuis HA connecté) pour la sync serveur.',
-      config_save_no_integration: 'Sync serveur impossible : API introuvable (404). Ajoutez l’intégration « HA Graph Explorer », redémarrez HA, puis enregistrez à nouveau.',
-      config_save_denied: 'Le serveur a refusé l’enregistrement (401/403). Vérifiez le token ou votre session HA.',
-      config_save_http: 'Échec enregistrement serveur (HTTP {status}).',
-      config_save_network: 'Impossible de joindre l’API — ouvrez cette page depuis l’URL de votre HA (/local/ha-graph/…) pour la même origine.',
-      config_save_aborted: 'Requête annulée ; réessayez.'
-    }
-  };
-
-  let currentLang = (localStorage.getItem(STORAGE_LANG) || 'en').slice(0, 2);
-  if (currentLang !== 'en' && currentLang !== 'fr') currentLang = 'en';
-
-  function t(key, vars) {
-    let s = (L10N[currentLang] && L10N[currentLang][key]) || L10N.en[key] || key;
-    if (vars && typeof s === 'string') {
-      Object.keys(vars).forEach(k => { s = s.replace(new RegExp('\\{' + k + '\\}', 'g'), vars[k]); });
-    }
-    return s;
-  }
-
-  function getDomainLabels() {
-    return [
-      { id: 'device', label: t('domain_device'), icon: 'fa-microchip' },
-      { id: 'automation', label: t('domain_automation'), icon: 'fa-robot' },
-      { id: 'script', label: t('domain_script'), icon: 'fa-code' },
-      { id: 'scene', label: t('domain_scene'), icon: 'fa-palette' },
-      { id: 'group', label: t('domain_group'), icon: 'fa-layer-group' },
-      { id: 'zone', label: t('domain_zone'), icon: 'fa-map-marker-alt' }
-    ];
-  }
-
-  const VIRTUAL_DOMAINS = new Set(['automation', 'script', 'scene', 'group', 'zone']);
-  const DOMAINS = getDomainLabels();
-  const DOMAIN_ICONS = Object.fromEntries(DOMAINS.map(d => [d.id, d.icon]));
-
-  function applyI18n() {
-    document.documentElement.lang = currentLang === 'fr' ? 'fr' : 'en';
-    document.querySelectorAll('[data-i18n]').forEach(el => {
-      const key = el.getAttribute('data-i18n');
-      if (key) el.textContent = t(key);
-    });
-    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
-      const key = el.getAttribute('data-i18n-placeholder');
-      if (key) el.placeholder = t(key);
-    });
-    document.querySelectorAll('[data-i18n-title]').forEach(el => {
-      const key = el.getAttribute('data-i18n-title');
-      if (key) el.title = t(key);
-    });
-    document.querySelectorAll('[data-i18n-aria]').forEach(el => {
-      const key = el.getAttribute('data-i18n-aria');
-      if (key) el.setAttribute('aria-label', t(key));
-    });
-    const statusEl = document.getElementById('status');
-    if (statusEl && (statusEl.textContent === 'Disconnected' || statusEl.textContent === 'Déconnecté')) statusEl.textContent = t('status_disconnected');
-    document.querySelectorAll('.lang-btn').forEach(btn => { btn.classList.toggle('active', btn.dataset.lang === currentLang); });
-    const titleEl = document.querySelector('title');
-    if (titleEl) titleEl.textContent = t('auth_title');
-  }
-
-  const DOMAIN_EMOJI = {
-    device: '📟',
-    automation: '🤖',
-    script: '📜',
-    scene: '🎨',
-    group: '👥',
-    zone: '📍'
-  };
-  const EDGE_COLORS = { trigger: '#ff9a8b', action: '#ffecd2', member: '#a8e6cf', target: '#d4a5a5' };
-
-  let graph3d = {
-    renderer: null,
-    scene: null,
-    camera: null,
-    controls: null,
-    simulation: null,
-    nodeGroup: null,
-    edgeGroup: null,
-    idToMesh: new Map(),
-    idToSimNode: new Map(),
-    simNodes: [],
-    simLinks: [],
-    rafId: null,
-    raycaster: null,
-    pointerNdc: new THREE.Vector2(),
-    edgeGeom: null,
-    edgeLine: null,
-    resizeHandler: null,
-    hoveredId: null,
-    layoutSaveTimer: null,
-    draggingNodeId: null,
-    dragIsActive: false,
-    dragPlane: null,
-    dragPlaneAnchor: null,
-    dragHit: null,
-    dragTmpDir: null,
-    dragStartClient: null,
-    suppressNextClick: false,
-    pendingSelectNodeId: null,
-    armDragNodeId: null,
-    css2dRenderer: null,
-    idToLabel: new Map(),
-    shapeSizeFactor: 1,
-    labelFontPx: 11,
-    floatingLabel: null,
-    pickRafId: null,
-    lastPickEv: null,
-    edgeBoundsStale: true,
-    _floatLabelNodeId: null,
-    _safeWheelHandler: null,
-    _wheelZoomUsesSafeFix: false
-  };
-
-  const _wheelZoomDir = new THREE.Vector3();
-
-  /** OrbitControls (Three r160) : getZoomScale divise par (100 * (devicePixelRatio|0)) → 0 si DPR∈(0,1), zoom cassé. */
-  function wheelZoomThreeJsBroken() {
-    const dpr = Number(window.devicePixelRatio);
-    return ((Number.isFinite(dpr) ? dpr : 1) | 0) === 0;
-  }
-
-  function onGraphSafeWheel(ev) {
-    if (!graph3d.controls || !graph3d.camera || !graph3d.controls.enabled) return;
-    if (!graph3d.camera.isPerspectiveCamera) return;
-    if (graph3d.pendingSelectNodeId || graph3d.draggingNodeId) return;
-    ev.preventDefault();
-    const ctl = graph3d.controls;
-    const cam = graph3d.camera;
-    const tgt = ctl.target;
-    _wheelZoomDir.subVectors(cam.position, tgt);
-    const dist = _wheelZoomDir.length();
-    if (dist < 1e-5) return;
-    _wheelZoomDir.divideScalar(dist);
-
-    let deltaMag = Math.abs(ev.deltaY);
-    if (ev.deltaMode === 1) deltaMag *= 16;
-    else if (ev.deltaMode === 2) deltaMag *= 100;
-
-    const rawDpr = Number(window.devicePixelRatio);
-    const safeDpr = Math.max(0.25, Math.min(4, (Number.isFinite(rawDpr) && rawDpr > 0) ? rawDpr : 1));
-    const normalized = Math.min(12, deltaMag / (100 * safeDpr));
-    let dollyScale = Math.pow(0.95, ctl.zoomSpeed * normalized);
-    dollyScale = THREE.MathUtils.clamp(dollyScale, 0.04, 0.9995);
-
-    const newDist = THREE.MathUtils.clamp(
-      ev.deltaY > 0 ? dist / dollyScale : dist * dollyScale,
-      ctl.minDistance,
-      ctl.maxDistance
-    );
-    cam.position.copy(tgt).addScaledVector(_wheelZoomDir, newDist);
-    ctl.update();
-  }
-
-  function detachGraphSafeWheel() {
-    const canvas = graph3d.renderer && graph3d.renderer.domElement;
-    if (canvas && graph3d._safeWheelHandler) {
-      canvas.removeEventListener('wheel', graph3d._safeWheelHandler);
-    }
-    graph3d._safeWheelHandler = null;
-    graph3d._wheelZoomUsesSafeFix = false;
-  }
-
-  function attachGraphSafeWheelIfNeeded() {
+// ── Dispose ───────────────────────────────────────────────────────────────────
+function disposeGraph3d() {
+  if (graph3d.rafId)          { cancelAnimationFrame(graph3d.rafId); graph3d.rafId = null; }
+  if (graph3d.layoutSaveTimer){ clearTimeout(graph3d.layoutSaveTimer); graph3d.layoutSaveTimer = null; }
+  if (graph3d.simulation)     { graph3d.simulation.stop(); graph3d.simulation = null; }
+  if (graph3d.resizeHandler)  { window.removeEventListener('resize', graph3d.resizeHandler); graph3d.resizeHandler = null; }
+  const canvas = graph3d.renderer?.domElement;
+  if (canvas) {
     detachGraphSafeWheel();
-    if (!graph3d.renderer || !graph3d.controls) return;
-    if (!wheelZoomThreeJsBroken()) {
-      graph3d.controls.enableZoom = true;
-      return;
-    }
-    graph3d.controls.enableZoom = false;
-    graph3d._wheelZoomUsesSafeFix = true;
-    graph3d._safeWheelHandler = onGraphSafeWheel;
-    graph3d.renderer.domElement.addEventListener('wheel', graph3d._safeWheelHandler, { passive: false });
+    canvas.removeEventListener('click', onCanvasClick);
+    canvas.removeEventListener('pointermove', onCanvasPointerMove);
+    canvas.removeEventListener('pointerdown', onCanvasPointerDown, true);
+    canvas.removeEventListener('pointerup', onCanvasPointerUp);
+    canvas.removeEventListener('pointercancel', onCanvasPointerUp);
   }
-
-  let ws = null;
-  let wsReconnectTimer = null;
-  let wsMessageId = 0;
-  let states = {};
-  let graphData = { nodes: [], edges: [] };
-  let baseUrl = '';
-  let deviceRegistry = [];
-  let entityToDevice = {};
-  let deviceToEntities = {};
-  let layoutPushTimer = null;
-
-  const API_CONFIG_URL = '/api/ha_graph_explorer/config';
-
-  const SERVER_SYNC_LABEL_KEYS = {
-    checking: 'server_sync_checking',
-    ok: 'server_sync_ok',
-    api_only: 'server_sync_api_only',
-    absent: 'server_sync_absent',
-    error: 'server_sync_error'
-  };
-
-  function updateServerSyncPill(state) {
-    const st = SERVER_SYNC_LABEL_KEYS[state] ? state : 'error';
-    document.querySelectorAll('[data-server-sync-pill]').forEach(el => {
-      el.className = 'server-sync-pill server-sync--' + st;
-      const lab = el.querySelector('.server-sync-label');
-      const lk = SERVER_SYNC_LABEL_KEYS[st];
-      if (lab) lab.textContent = t(lk);
-      const tk = lk + '_title';
-      const tip = t(tk);
-      el.title = tip;
-      el.setAttribute('aria-label', t(lk));
-    });
+  const container = document.getElementById('graph-container');
+  if (container) container.innerHTML = '';
+  if (graph3d.controls) { graph3d.controls.enabled = true; graph3d.controls.dispose(); }
+  if (graph3d.renderer) graph3d.renderer.dispose();
+  if (graph3d.edgeGeom) graph3d.edgeGeom.dispose();
+  graph3d.renderer = graph3d.scene = graph3d.camera = graph3d.controls = null;
+  graph3d.nodeGroup = graph3d.edgeGroup = graph3d.edgeLine = graph3d.edgeGeom = null;
+  graph3d.idToMesh.clear(); graph3d.idToSimNode.clear();
+  graph3d.simNodes = []; graph3d.simLinks = [];
+  graph3d.raycaster = graph3d.hoveredId = null;
+  graph3d._edgePairs = null;
+  graph3d.draggingNodeId = null; graph3d.dragIsActive = false;
+  graph3d.dragStartClient = null; graph3d.suppressNextClick = false;
+  graph3d.pendingSelectNodeId = graph3d.armDragNodeId = null;
+  graph3d.css2dRenderer = null; graph3d.idToLabel.clear();
+  if (graph3d.floatingLabel) {
+    try { if (graph3d.floatingLabel.parent) graph3d.floatingLabel.parent.remove(graph3d.floatingLabel); } catch (e) {}
+    graph3d.floatingLabel = null;
   }
+  if (graph3d.pickRafId) { cancelAnimationFrame(graph3d.pickRafId); graph3d.pickRafId = null; }
+  graph3d.lastPickEv = null; graph3d.edgeBoundsStale = true;
+  graph3d._frameIdx = 0; graph3d._simEdgeTick = 0; graph3d._floatLabelNodeId = null;
+  // Clean up animation particles
+  graph3d.activeParticles.forEach(p => { try { if (p.mesh.parent) p.mesh.parent.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh.material.dispose(); } catch(e) {} });
+  graph3d.activeAnimations = [];
+  graph3d.activeParticles = [];
+}
 
-  function isAbortError(e) {
-    return Boolean(e && e.name === 'AbortError');
+// ── Node mesh factory ─────────────────────────────────────────────────────────
+function createNodeMesh(gd, deg) {
+  const base = 5 + Math.min(10, Math.sqrt((deg || 0) + 1) * 2.2);
+  const domain = gd ? gd.domain : 'device';
+  const mat = new THREE.MeshStandardMaterial({
+    color: nodeColorLive(gd ? gd.id : '', gd ? gd.state : 'off').clone(),
+    metalness: 0.28, roughness: 0.52,
+    emissive: new THREE.Color(0x000000), emissiveIntensity: 0.12
+  });
+  const lowPoly = graphData.nodes.length > LARGE_GRAPH_LABEL_THRESHOLD;
+  let geom;
+  switch (domain) {
+    case 'device':
+      /* Device aggregate: sphere */
+      geom = lowPoly ? new THREE.SphereGeometry(base, 12, 10) : new THREE.SphereGeometry(base, 22, 18); break;
+    case 'automation':
+      /* Automation: cube */
+      geom = new THREE.BoxGeometry(base*1.38, base*1.38, base*1.38); break;
+    case 'script':
+      /* Script: flat box (distinct from automation cube) */
+      geom = new THREE.BoxGeometry(base*1.22, base*0.62, base*0.92); break;
+    case 'scene':
+      /* Scene: flattened octahedron (diamond) */
+      geom = new THREE.OctahedronGeometry(base*1.18, 0); geom.scale(1, 0.46, 1); break;
+    case 'group':
+      /* Group: hexagonal prism */
+      geom = new THREE.CylinderGeometry(base*0.98, base*0.98, base*1.18, 6); break;
+    case 'zone':
+      /* Zone: flat puck */
+      geom = lowPoly ? new THREE.CylinderGeometry(base*1.12, base*1.12, base*0.38, 12)
+                     : new THREE.CylinderGeometry(base*1.12, base*1.12, base*0.38, 20); break;
+    default:
+      /* Orphan entities (sensor, light, switch, …): small sphere */
+      geom = lowPoly ? new THREE.SphereGeometry(base*0.98, 12, 10) : new THREE.SphereGeometry(base*0.98, 18, 14);
   }
+  return new THREE.Mesh(geom, mat);
+}
 
-  async function refreshServerSyncIndicator() {
-    updateServerSyncPill('checking');
-    try {
-      const r0 = await fetch(API_CONFIG_URL, {
-        method: 'GET',
-        credentials: 'same-origin',
-        headers: { Accept: 'application/json' }
-      });
-      if (r0.status === 404) {
-        updateServerSyncPill('absent');
-        return;
-      }
-      const auth = getEffectiveAuthToken();
-      if (auth) {
-        const r1 = await fetch(API_CONFIG_URL, {
-          method: 'GET',
-          credentials: 'same-origin',
-          headers: { Authorization: 'Bearer ' + auth, Accept: 'application/json' }
-        });
-        if (r1.ok) {
-          updateServerSyncPill('ok');
-          return;
-        }
-      }
-      if (r0.status === 401 || r0.status === 403) {
-        updateServerSyncPill('api_only');
-        return;
-      }
-      updateServerSyncPill('error');
-    } catch (e) {
-      if (isAbortError(e)) return;
-      updateServerSyncPill('error');
-    }
-  }
+// ── CSS2D label management ────────────────────────────────────────────────────
+function makeLabelDiv(text) {
+  const div = document.createElement('div');
+  div.className = 'graph-node-label';
+  div.textContent = text;
+  div.style.cssText = `
+    font-family:'Segoe UI',system-ui,sans-serif; font-weight:500; font-size:${graph3d.labelFontPx}px;
+    color:#e8e8e8; text-shadow:0 1px 2px #000,0 0 10px rgba(26,26,46,0.95);
+    max-width:min(220px,38vw); text-align:center; line-height:1.2;
+    word-break:break-word; pointer-events:none; opacity:1;
+  `;
+  return div;
+}
 
-  function getHassAccessTokenFromBrowser() {
-    try {
-      const keys = ['hassTokens', 'hass_auth', 'ha_tokens'];
-      for (let i = 0; i < keys.length; i++) {
-        const raw = localStorage.getItem(keys[i]);
-        if (!raw) continue;
-        const parsed = JSON.parse(raw);
-        const t = parsed.access_token || parsed.accessToken;
-        if (typeof t === 'string' && t.length > 0) return t;
-      }
-    } catch (e) { /* ignore */ }
-    return '';
-  }
+function attachNodeLabel(mesh, nodeId, labelText) {
+  if (!mesh?.geometry) return;
+  mesh.geometry.computeBoundingSphere();
+  const r = (mesh.geometry.boundingSphere?.radius > 0 ? mesh.geometry.boundingSphere.radius : 12);
+  const label = new CSS2DObject(makeLabelDiv(labelText?.trim() || nodeId));
+  label.center.set(0.5, 1);
+  label.position.set(0, -r - Math.max(5, r*0.14), 0);
+  mesh.add(label);
+  graph3d.idToLabel.set(nodeId, label);
+}
 
-  function getEffectiveAuthToken() {
-    return getToken() || getHassAccessTokenFromBrowser();
-  }
+function shouldAttachAllLabels() {
+  return !!(document.getElementById('labels-show-all')?.checked);
+}
 
-  async function pushServerConfig(patch) {
-    const auth = getEffectiveAuthToken();
-    if (!auth) return { ok: false, reason: 'no_auth' };
-    try {
-      const r = await fetch(API_CONFIG_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: 'Bearer ' + auth
-        },
-        credentials: 'same-origin',
-        body: JSON.stringify(patch)
-      });
-      if (r.status === 404) return { ok: false, reason: 'not_found', status: 404 };
-      if (r.status === 401 || r.status === 403) return { ok: false, reason: 'forbidden', status: r.status };
-      if (!r.ok) return { ok: false, reason: 'bad_status', status: r.status };
-      return { ok: true };
-    } catch (e) {
-      if (isAbortError(e)) return { ok: false, reason: 'abort' };
-      return { ok: false, reason: 'network' };
-    }
-  }
+function stripAllNodeLabels() {
+  graph3d.idToLabel.forEach(lbl => { if (lbl.parent) lbl.parent.remove(lbl); });
+  graph3d.idToLabel.clear();
+}
 
-  async function syncFromServer() {
-    try {
-      /* 1) Session HA (cookie) — même sans token graphe / OAuth dans localStorage (autre URL ou navigateur). */
-      let r = await fetch(API_CONFIG_URL, {
-        credentials: 'same-origin',
-        headers: { Accept: 'application/json' }
-      });
-      if (r.status === 404) return;
-      if (!r.ok) {
-        const auth = getEffectiveAuthToken();
-        if (!auth) return;
-        if (r.status !== 401 && r.status !== 403) return;
-        r = await fetch(API_CONFIG_URL, {
-          credentials: 'same-origin',
-          headers: {
-            Authorization: 'Bearer ' + auth,
-            Accept: 'application/json'
-          }
-        });
-      }
-      if (r.status === 404) return;
-      if (!r.ok) return;
-      const data = await r.json();
-      if (data.base_url) setBaseUrl(String(data.base_url).replace(/\/$/, ''));
-      if (data.token) setToken(String(data.token).trim());
-      applyServerLayoutsToLocalStorage(data);
-      const baseInput = document.getElementById('base-url-input');
-      if (baseInput) baseInput.value = getBaseUrl();
-    } catch (e) {
-      if (isAbortError(e)) return;
-      /* integration missing or network */
-    }
-  }
+function ensureFloatingHoverLabel() {
+  if (graph3d.floatingLabel) return;
+  const label = new CSS2DObject(makeLabelDiv(''));
+  label.center.set(0.5, 1);
+  graph3d.floatingLabel = label;
+}
 
-  function schedulePushLayoutToServer(pos) {
-    if (layoutPushTimer) clearTimeout(layoutPushTimer);
-    layoutPushTimer = setTimeout(() => {
-      layoutPushTimer = null;
-      const auth = getEffectiveAuthToken();
-      if (!auth) return;
-      pushServerConfig({ layout_3d: pos }).catch(() => {});
-    }, 900);
-  }
-
-  function getToken() {
-    return localStorage.getItem(STORAGE_TOKEN) || '';
-  }
-  function setToken(token) {
-    if (token) localStorage.setItem(STORAGE_TOKEN, token);
-    else localStorage.removeItem(STORAGE_TOKEN);
-  }
-  function getBaseUrl() {
-    const stored = localStorage.getItem(STORAGE_BASE);
-    if (stored) return stored;
-    const u = new URL(window.location.href);
-    return u.origin;
-  }
-  function setBaseUrl(url) {
-    localStorage.setItem(STORAGE_BASE, url);
-  }
-
-  function showAuth(show) {
-    document.getElementById('auth-panel').classList.toggle('hidden', !show);
-  }
-  function setStatus(text, ok) {
-    const el = document.getElementById('status');
-    el.textContent = text;
-    if (ok === true || ok === 'ok') el.className = 'status-ok';
-    else if (ok === 'warn') el.className = 'status-warn';
-    else el.className = 'status-err';
-  }
-
-  function showAuthSaveResult(res) {
-    const el = document.getElementById('auth-save-result');
-    if (!el) return;
-    el.className = 'hint';
-    let msg = '';
-    let cls = 'save-result--err';
-    let statusKind = false;
-    if (res.ok) {
-      msg = t('config_save_ok_server');
-      cls = 'save-result--ok';
-      statusKind = true;
-    } else if (res.reason === 'no_auth') {
-      msg = t('config_save_local_only');
-      cls = 'save-result--warn';
-      statusKind = 'warn';
-    } else if (res.reason === 'not_found') {
-      msg = t('config_save_no_integration');
-    } else if (res.reason === 'forbidden') {
-      msg = t('config_save_denied');
-    } else if (res.reason === 'bad_status') {
-      msg = t('config_save_http', { status: res.status != null ? res.status : '?' });
-    } else if (res.reason === 'network') {
-      msg = t('config_save_network');
-    } else if (res.reason === 'abort') {
-      msg = t('config_save_aborted');
-    } else {
-      msg = t('config_save_network');
-    }
-    el.textContent = msg;
-    el.classList.add(cls);
-    setStatus(msg, statusKind);
-  }
-
-  function setProgress(show, percent, text) {
-    const bar = document.getElementById('progress-bar');
-    const fill = bar && bar.querySelector('.fill');
-    const txt = document.getElementById('progress-text');
-    if (bar) bar.style.display = show ? 'block' : 'none';
-    if (fill) fill.style.width = (percent || 0) + '%';
-    if (txt) txt.textContent = text || '';
-  }
-
-  function wsConnect() {
-    baseUrl = getBaseUrl();
-    const token = getToken();
-    if (!token) {
-      showAuth(true);
-      return;
-    }
-    const wsUrl = (baseUrl.replace(/^http/, 'ws') + '/api/websocket').replace('//api', '/api');
-    ws = new WebSocket(wsUrl);
-    ws.onopen = () => {
-      /* Ne pas écraser le message de sauvegarde (#status) — la progression est dans la barre */
-      setProgress(true, 8, t('status_loading'));
-    };
-    ws.onmessage = (ev) => {
-      const msg = JSON.parse(ev.data);
-      if (msg.type === 'auth_required') {
-        ws.send(JSON.stringify({ type: 'auth', access_token: token }));
-        return;
-      }
-      if (msg.type === 'auth_ok') {
-        setStatus(t('status_connected'), true);
-        loadData();
-        subscribeStateChanged();
-        return;
-      }
-      if (msg.type === 'auth_invalid') {
-        setProgress(false);
-        setStatus(t('status_invalid_token'), false);
-        showAuth(true);
-        return;
-      }
-      if (msg.type === 'result') {
-        const pending = window.__haWsPending && window.__haWsPending[msg.id];
-        if (pending) {
-          clearTimeout(pending.timer);
-          delete window.__haWsPending[msg.id];
-          if (msg.success !== false) pending.resolve(msg.result);
-          else pending.reject(new Error(msg.error?.message || msg.error?.code || 'Erreur WS'));
-        }
-        return;
-      }
-      if (msg.type === 'event' && msg.event?.event_type === 'state_changed') {
-        const d = msg.event.data;
-        if (d.entity_id && d.new_state) {
-          states[d.entity_id] = d.new_state;
-          updateNodeState(d.entity_id, d.new_state);
-        }
-      }
-    };
-    ws.onclose = () => {
-      setProgress(false);
-      setStatus(t('status_disconnected'), false);
-      wsReconnectTimer = setTimeout(wsConnect, 3000);
-    };
-    ws.onerror = () => {};
-  }
-
-  function wsSend(type, extra = {}) {
-    return new Promise((resolve, reject) => {
-      if (!ws || ws.readyState !== WebSocket.OPEN) {
-        reject(new Error('WebSocket non connecté'));
-        return;
-      }
-      const id = ++wsMessageId;
-      if (!window.__haWsPending) window.__haWsPending = {};
-      const timer = setTimeout(() => {
-        if (window.__haWsPending && window.__haWsPending[id]) {
-          delete window.__haWsPending[id];
-          reject(new Error('Timeout'));
-        }
-      }, 20000);
-      window.__haWsPending[id] = { resolve, reject, timer };
-      ws.send(JSON.stringify({ id, type, ...extra }));
-    });
-  }
-
-  function callService(domain, service, serviceData = {}) {
-    return wsSend('call_service', {
-      domain,
-      service,
-      service_data: serviceData
-    });
-  }
-
-  function loadData() {
-    setStatus(t('status_loading'), true);
-    setProgress(true, 5, t('progress_fetching'));
-    Promise.all([
-      wsSend('get_states'),
-      wsSend('config/device_registry/list').catch(() => []),
-      wsSend('config/entity_registry/list').catch(() => [])
-    ]).then(([statesResult, devices, entitiesRaw]) => {
-      const list = statesResult || [];
-      const rawDevices = devices || [];
-      deviceRegistry = Array.isArray(rawDevices) ? rawDevices : (rawDevices.devices || []);
-      const entities = Array.isArray(entitiesRaw) ? entitiesRaw : (entitiesRaw && entitiesRaw.length !== undefined ? entitiesRaw : []);
-      setProgress(true, 15, t('progress_entities_devices', { entities: list.length, devices: deviceRegistry.length }));
-      states = list.reduce((acc, s) => {
-        acc[s.entity_id] = s;
-        return acc;
-      }, {});
-      entityToDevice = {};
-      deviceToEntities = {};
-      entities.forEach(ent => {
-        const eid = ent.entity_id;
-        const did = ent.device_id;
-        if (eid && did) {
-          entityToDevice[eid] = did;
-          if (!deviceToEntities[did]) deviceToEntities[did] = [];
-          deviceToEntities[did].push(eid);
-        }
-      });
-      Object.keys(states).forEach(eid => {
-        const did = entityToDevice[eid];
-        if (did && (!deviceToEntities[did] || !deviceToEntities[did].includes(eid))) {
-          if (!deviceToEntities[did]) deviceToEntities[did] = [];
-          deviceToEntities[did].push(eid);
-        }
-      });
-      setProgress(true, 25, t('progress_building'));
-      return buildGraphFromDevices();
-    }).then(() => {
-      setProgress(true, 85, t('progress_rendering', { nodes: graphData.nodes.length, edges: graphData.edges.length }));
-      renderGraph();
-      loadLayoutFromStorage();
-      setProgress(false);
-      setStatus(t('status_connected_nodes', { n: graphData.nodes.length }), true);
-    }).catch(err => {
-      setProgress(false);
-      setStatus(t('status_error', { msg: err.message || err }), false);
-    });
-  }
-
-  function entityDomain(entityId) {
-    const i = entityId.indexOf('.');
-    return i > 0 ? entityId.slice(0, i) : '';
-  }
-
-  function getEntityIdsFromAttributes(attrs) {
-    if (!attrs) return [];
-    let list = attrs.entity_id || attrs.entities || attrs.members;
-    if (typeof list === 'string') list = [list];
-    if (!Array.isArray(list)) return [];
-    return list.filter(id => typeof id === 'string' && id.includes('.'));
-  }
-
-  function parseAutomationScriptConfig(config) {
-    const entityIds = new Set();
-    const deviceIds = new Set();
-    if (!config) return { entityIds, deviceIds };
-    const addEntity = (v) => {
-      if (typeof v === 'string' && v.includes('.')) entityIds.add(v);
-      if (Array.isArray(v)) v.forEach(addEntity);
-    };
-    const addDevice = (v) => {
-      if (typeof v === 'string' && v.length > 10) deviceIds.add(v);
-      if (Array.isArray(v)) v.forEach(addDevice);
-    };
-    const walk = (obj) => {
-      if (!obj || typeof obj !== 'object') return;
-      if (obj.entity_id) addEntity(obj.entity_id);
-      if (obj.entity) addEntity(obj.entity);
-      if (obj.entities) addEntity(obj.entities);
-      if (obj.device_id) addDevice(obj.device_id);
-      if (obj.data?.entity_id) addEntity(obj.data.entity_id);
-      if (obj.data?.device_id) addDevice(obj.data.device_id);
-      if (obj.service_data?.entity_id) addEntity(obj.service_data.entity_id);
-      if (obj.service_data?.device_id) addDevice(obj.service_data.device_id);
-      if (obj.target?.entity_id) addEntity(obj.target.entity_id);
-      if (obj.target?.device_id) addDevice(obj.target.device_id);
-      if (obj.event_data?.entity_id) addEntity(obj.event_data.entity_id);
-      if (obj.data?.entity_id) addEntity(obj.data.entity_id);
-      if (obj.data?.device_id) addDevice(obj.data.device_id);
-      if (obj.trigger) (Array.isArray(obj.trigger) ? obj.trigger : [obj.trigger]).forEach(walk);
-      if (obj.triggers) (Array.isArray(obj.triggers) ? obj.triggers : [obj.triggers]).forEach(walk);
-      if (obj.action) (Array.isArray(obj.action) ? obj.action : [obj.action]).forEach(walk);
-      if (obj.actions) (Array.isArray(obj.actions) ? obj.actions : [obj.actions]).forEach(walk);
-      if (obj.condition) (Array.isArray(obj.condition) ? obj.condition : [obj.condition]).forEach(walk);
-      if (obj.conditions) (Array.isArray(obj.conditions) ? obj.conditions : [obj.conditions]).forEach(walk);
-      if (obj.sequence) (Array.isArray(obj.sequence) ? obj.sequence : [obj.sequence]).forEach(walk);
-      if (obj.repeat) walk(obj.repeat);
-      if (obj.choose) {
-        const choose = Array.isArray(obj.choose) ? obj.choose : [obj.choose];
-        choose.forEach(branch => {
-          if (branch && typeof branch === 'object') {
-            if (Array.isArray(branch.conditions)) branch.conditions.forEach(walk);
-            if (branch.sequence) (Array.isArray(branch.sequence) ? branch.sequence : [branch.sequence]).forEach(walk);
-          }
-        });
-      }
-      if (obj.default) walk(obj.default);
-      if (obj.if) (Array.isArray(obj.if) ? obj.if : [obj.if]).forEach(walk);
-      if (obj.then) (Array.isArray(obj.then) ? obj.then : [obj.then]).forEach(walk);
-      if (obj.else) (Array.isArray(obj.else) ? obj.else : [obj.else]).forEach(walk);
-      if (obj.wait_for_trigger) (Array.isArray(obj.wait_for_trigger) ? obj.wait_for_trigger : [obj.wait_for_trigger]).forEach(walk);
-      if (Array.isArray(obj)) obj.forEach(walk);
-      else Object.values(obj).forEach(walk);
-    };
-    walk(config);
-    return { entityIds, deviceIds };
-  }
-
-  function entityToNodeId(entityOrDeviceId) {
-    if (!entityOrDeviceId || typeof entityOrDeviceId !== 'string') return null;
-    if (!entityOrDeviceId.includes('.')) return entityOrDeviceId;
-    const domain = entityDomain(entityOrDeviceId);
-    if (VIRTUAL_DOMAINS.has(domain)) return entityOrDeviceId;
-    return entityToDevice[entityOrDeviceId] || entityOrDeviceId;
-  }
-
-  function deviceAggregatedState(deviceId) {
-    const eids = deviceToEntities[deviceId];
-    if (!eids || !eids.length) return 'off';
-    let hasOn = false, hasUnavail = false;
-    eids.forEach(eid => {
-      const s = states[eid];
-      if (!s) return;
-      if (s.state === 'unavailable') hasUnavail = true;
-      else if (s.state === 'on') hasOn = true;
-    });
-    if (hasUnavail && !hasOn && eids.every(eid => (states[eid] || {}).state === 'unavailable')) return 'unavailable';
-    return hasOn ? 'on' : 'off';
-  }
-
-  function buildGraphFromDevices() {
-    const nodeIds = new Set();
-    const nodes = [];
-    const entityEdges = [];
-
-    setProgress(true, 30, t('progress_nodes_devices'));
-    deviceRegistry.forEach((dev, i) => {
-      if (i % 100 === 0 && deviceRegistry.length > 100) setProgress(true, 30 + (i / deviceRegistry.length) * 20, t('progress_devices', { current: i + 1, total: deviceRegistry.length }));
-      const id = dev.id;
-      const name = dev.name_by_user || dev.name || 'Sans nom';
-      const state = deviceAggregatedState(id);
-      nodeIds.add(id);
-      nodes.push({
-        id,
-        domain: 'device',
-        label: name,
-        icon: '📟',
-        state,
-        attributes: { device_id: id },
-        entityIds: deviceToEntities[id] || []
-      });
-    });
-
-    setProgress(true, 52, t('progress_automations_scripts'));
-    Object.keys(states).forEach(entityId => {
-      const domain = entityDomain(entityId);
-      if (!VIRTUAL_DOMAINS.has(domain)) return;
-      const s = states[entityId];
-      const name = (s.attributes && s.attributes.friendly_name) || entityId;
-      nodeIds.add(entityId);
-      nodes.push({
-        id: entityId,
-        domain,
-        label: name,
-        icon: DOMAIN_EMOJI[domain] || '⬤',
-        state: s.state,
-        attributes: s.attributes || {},
-        entityIds: [entityId]
-      });
-    });
-
-    setProgress(true, 58, t('progress_links'));
-    Object.values(states).forEach(s => {
-      const domain = entityDomain(s.entity_id);
-      const attrs = s.attributes || {};
-      if (domain === 'group' || domain === 'zone') {
-        getEntityIdsFromAttributes(attrs).forEach(tid => {
-          entityEdges.push({ source: s.entity_id, target: tid, type: 'member' });
-        });
-      }
-      if (domain === 'scene') {
-        getEntityIdsFromAttributes(attrs).forEach(tid => {
-          entityEdges.push({ source: s.entity_id, target: tid, type: 'target' });
-        });
-      }
-    });
-
-    setProgress(true, 62, t('progress_automations_search'));
-    return tryFetchAutomationScriptEdges(entityEdges, new Set(Object.keys(states))).then(() => {
-      entityEdges.forEach(({ target: tgtE }) => {
-        const tgtN = entityToNodeId(tgtE);
-        if (tgtN && !nodeIds.has(tgtN) && states[tgtN]) {
-          nodeIds.add(tgtN);
-          const s = states[tgtN];
-          const domain = entityDomain(tgtN);
-          nodes.push({
-            id: tgtN,
-            domain,
-            label: (s.attributes && s.attributes.friendly_name) || tgtN,
-            icon: DOMAIN_EMOJI[domain] || '⬤',
-            state: s.state,
-            attributes: s.attributes || {},
-            entityIds: [tgtN]
-          });
-        }
-      });
-      const edgeKeys = new Set();
-      const edges = [];
-      entityEdges.forEach(({ source: srcE, target: tgtE, type }) => {
-        const srcN = entityToNodeId(srcE);
-        const tgtN = entityToNodeId(tgtE);
-        if (srcN && tgtN && srcN !== tgtN && nodeIds.has(srcN) && nodeIds.has(tgtN)) {
-          const key = srcN + '|' + tgtN + '|' + type;
-          if (!edgeKeys.has(key)) {
-            edgeKeys.add(key);
-            edges.push({ source: srcN, target: tgtN, type });
-          }
-        }
-      });
-      graphData = { nodes, edges };
-    });
-  }
-
-  function tryFetchAutomationScriptEdges(edges, knownIds) {
-    const automationEntityIds = Object.keys(states).filter(k => k.startsWith('automation.'));
-    const scriptEntityIds = Object.keys(states).filter(k => k.startsWith('script.'));
-
-    function addEdgesFromConfig(sourceEid, config, edgeType) {
-      if (!config || typeof config !== 'object') return;
-      const { entityIds: ids, deviceIds: dids } = parseAutomationScriptConfig(config);
-      ids.forEach(tid => {
-        if (knownIds.has(tid)) edges.push({ source: sourceEid, target: tid, type: edgeType });
-      });
-      dids.forEach(did => {
-        edges.push({ source: sourceEid, target: did, type: edgeType });
-      });
-    }
-
-    function runInBatches(arr, batchSize, fn) {
-      let p = Promise.resolve();
-      for (let i = 0; i < arr.length; i += batchSize) {
-        const batch = arr.slice(i, i + batchSize);
-        p = p.then(() => Promise.all(batch.map(fn)));
-      }
-      return p;
-    }
-
-    const p1 = runInBatches(automationEntityIds, 5, (entityId) =>
-      wsSend('automation/config', { entity_id: entityId })
-        .then(result => {
-          const config = result && (result.config !== undefined ? result.config : result);
-          addEdgesFromConfig(entityId, config, 'trigger');
-        })
-        .catch(() => {})
-    );
-    const p2 = runInBatches(scriptEntityIds, 5, (entityId) =>
-      wsSend('script/config', { entity_id: entityId })
-        .then(result => {
-          const config = result && (result.config !== undefined ? result.config : result);
-          addEdgesFromConfig(entityId, config, 'action');
-        })
-        .catch(() => {})
-    );
-    return Promise.all([p1, p2]);
-  }
-
-  function nodeColor(state) {
-    if (state === 'unavailable') return new THREE.Color(0xe94560);
-    if (state === 'on') return new THREE.Color(0xa8e6cf);
-    return new THREE.Color(0x6c757d);
-  }
-
-  function disposeGraph3d() {
-    if (graph3d.rafId) {
-      cancelAnimationFrame(graph3d.rafId);
-      graph3d.rafId = null;
-    }
-    if (graph3d.layoutSaveTimer) {
-      clearTimeout(graph3d.layoutSaveTimer);
-      graph3d.layoutSaveTimer = null;
-    }
-    if (graph3d.simulation) {
-      graph3d.simulation.stop();
-      graph3d.simulation = null;
-    }
-    if (graph3d.resizeHandler) {
-      window.removeEventListener('resize', graph3d.resizeHandler);
-      graph3d.resizeHandler = null;
-    }
-    const canvas = graph3d.renderer && graph3d.renderer.domElement;
-    if (canvas) {
-      detachGraphSafeWheel();
-      canvas.removeEventListener('click', onCanvasClick);
-      canvas.removeEventListener('pointermove', onCanvasPointerMove);
-      canvas.removeEventListener('pointerdown', onCanvasPointerDown, true);
-      canvas.removeEventListener('pointerup', onCanvasPointerUp);
-      canvas.removeEventListener('pointercancel', onCanvasPointerUp);
-    }
-    const container = document.getElementById('graph-container');
-    if (container) container.innerHTML = '';
-    if (graph3d.controls) {
-      graph3d.controls.enabled = true;
-      graph3d.controls.dispose();
-    }
-    if (graph3d.renderer) graph3d.renderer.dispose();
-    if (graph3d.edgeGeom) graph3d.edgeGeom.dispose();
-    graph3d.renderer = null;
-    graph3d.scene = null;
-    graph3d.camera = null;
-    graph3d.controls = null;
-    graph3d.nodeGroup = null;
-    graph3d.edgeGroup = null;
-    graph3d.edgeLine = null;
-    graph3d.edgeGeom = null;
-    graph3d.idToMesh.clear();
-    graph3d.idToSimNode.clear();
-    graph3d.simNodes = [];
-    graph3d.simLinks = [];
-    graph3d.raycaster = null;
-    graph3d.hoveredId = null;
-    graph3d._edgePairs = null;
-    graph3d.draggingNodeId = null;
-    graph3d.dragIsActive = false;
-    graph3d.dragStartClient = null;
-    graph3d.suppressNextClick = false;
-    graph3d.pendingSelectNodeId = null;
-    graph3d.armDragNodeId = null;
-    graph3d.css2dRenderer = null;
-    graph3d.idToLabel.clear();
-    if (graph3d.floatingLabel) {
-      try {
-        if (graph3d.floatingLabel.parent) graph3d.floatingLabel.parent.remove(graph3d.floatingLabel);
-      } catch (e) { /* ignore */ }
-      graph3d.floatingLabel = null;
-    }
-    if (graph3d.pickRafId) {
-      cancelAnimationFrame(graph3d.pickRafId);
-      graph3d.pickRafId = null;
-    }
-    graph3d.lastPickEv = null;
-    graph3d.edgeBoundsStale = true;
-    graph3d._frameIdx = 0;
-    graph3d._simEdgeTick = 0;
+function syncFloatingLabelToHover() {
+  if (shouldAttachAllLabels()) return;
+  const fl = graph3d.floatingLabel;
+  if (!fl) return;
+  const id = graph3d.hoveredId;
+  if (!id) {
+    if (fl.parent) fl.parent.remove(fl);
     graph3d._floatLabelNodeId = null;
+    return;
   }
-
-  function createNodeMesh(gd, deg) {
-    const base = 5 + Math.min(10, Math.sqrt((deg || 0) + 1) * 2.2);
-    const domain = gd ? gd.domain : 'device';
-    const st = gd ? gd.state : 'off';
-    const col = nodeColor(st);
-    const mat = new THREE.MeshStandardMaterial({
-      color: col.clone(),
-      metalness: 0.28,
-      roughness: 0.52,
-      emissive: new THREE.Color(0x000000),
-      emissiveIntensity: 0.12
-    });
-    const lowPoly = graphData.nodes.length > LARGE_GRAPH_LABEL_THRESHOLD;
-    let geom;
-    switch (domain) {
-      case 'device':
-        /* Appareil / agrégat : sphère (entités regroupées) */
-        geom = lowPoly
-          ? new THREE.SphereGeometry(base, 12, 10)
-          : new THREE.SphereGeometry(base, 22, 18);
-        break;
-      case 'automation':
-        /* Automatisation : cube */
-        geom = new THREE.BoxGeometry(base * 1.38, base * 1.38, base * 1.38);
-        break;
-      case 'script':
-        /* Script : plaque rectangulaire (différent du cube automation) */
-        geom = new THREE.BoxGeometry(base * 1.22, base * 0.62, base * 0.92);
-        break;
-      case 'scene':
-        /* Scène : losange (octaèdre aplati) */
-        geom = new THREE.OctahedronGeometry(base * 1.18, 0);
-        geom.scale(1, 0.46, 1);
-        break;
-      case 'group':
-        /* Groupe : prisme hexagonal */
-        geom = new THREE.CylinderGeometry(base * 0.98, base * 0.98, base * 1.18, 6);
-        break;
-      case 'zone':
-        /* Zone : palet (cylindre plat) */
-        geom = lowPoly
-          ? new THREE.CylinderGeometry(base * 1.12, base * 1.12, base * 0.38, 12)
-          : new THREE.CylinderGeometry(base * 1.12, base * 1.12, base * 0.38, 20);
-        break;
-      default:
-        /* Entités orphelines (sensor, light, switch, …) : sphère */
-        geom = lowPoly
-          ? new THREE.SphereGeometry(base * 0.98, 12, 10)
-          : new THREE.SphereGeometry(base * 0.98, 18, 14);
-    }
-    return new THREE.Mesh(geom, mat);
+  const mesh = graph3d.idToMesh.get(id);
+  if (!mesh?.visible) {
+    if (fl.parent) fl.parent.remove(fl);
+    graph3d._floatLabelNodeId = null;
+    return;
   }
-
-  function attachNodeLabel(mesh, nodeId, labelText) {
-    if (!mesh || !mesh.geometry) return;
+  const sn = graph3d.idToSimNode.get(id);
+  fl.element.textContent = sn?.label?.trim() || id;
+  fl.element.style.fontSize = graph3d.labelFontPx + 'px';
+  if (fl.parent !== mesh || graph3d._floatLabelNodeId !== id) {
     mesh.geometry.computeBoundingSphere();
-    const bs = mesh.geometry.boundingSphere;
-    const r = bs && bs.radius > 0 ? bs.radius : 12;
-    const div = document.createElement('div');
-    div.className = 'graph-node-label';
-    div.textContent = (labelText != null && String(labelText).trim()) ? String(labelText).trim() : nodeId;
-    const px = graph3d.labelFontPx > 0 ? graph3d.labelFontPx : 11;
-    div.style.fontSize = px + 'px';
-    div.style.fontFamily = '\'Segoe UI\', system-ui, sans-serif';
-    div.style.fontWeight = '500';
-    div.style.color = '#e8e8e8';
-    div.style.textShadow = '0 1px 2px #000, 0 0 10px rgba(26,26,46,0.95)';
-    div.style.maxWidth = 'min(220px, 38vw)';
-    div.style.textAlign = 'center';
-    div.style.lineHeight = '1.2';
-    div.style.wordBreak = 'break-word';
-    div.style.pointerEvents = 'none';
-    div.style.opacity = '1';
-    const label = new CSS2DObject(div);
-    label.center.set(0.5, 1);
-    label.position.set(0, -r - Math.max(5, r * 0.14), 0);
-    mesh.add(label);
-    graph3d.idToLabel.set(nodeId, label);
+    const r = (mesh.geometry.boundingSphere?.radius > 0 ? mesh.geometry.boundingSphere.radius : 12);
+    fl.position.set(0, -r - Math.max(5, r*0.14), 0);
   }
+  if (fl.parent !== mesh) { if (fl.parent) fl.parent.remove(fl); mesh.add(fl); }
+  graph3d._floatLabelNodeId = id;
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const lab = sn?.label || '';
+  fl.element.style.opacity = (!q || id.toLowerCase().includes(q) || lab.toLowerCase().includes(q)) ? '1' : '0.3';
+}
 
-  function shouldAttachAllLabels() {
-    const el = document.getElementById('labels-show-all');
-    return !!(el && el.checked);
+function applyLabelFontSizes() {
+  const px = graph3d.labelFontPx > 0 ? graph3d.labelFontPx : 11;
+  graph3d.idToLabel.forEach(lbl => { if (lbl.element) lbl.element.style.fontSize = px + 'px'; });
+  if (graph3d.floatingLabel?.element) graph3d.floatingLabel.element.style.fontSize = px + 'px';
+}
+
+function reapplyLabelMode() {
+  if (!graph3d.nodeGroup) return;
+  stripAllNodeLabels();
+  if (graph3d.floatingLabel?.parent) graph3d.floatingLabel.parent.remove(graph3d.floatingLabel);
+  if (shouldAttachAllLabels()) {
+    graphData.nodes.forEach(gd => { const m = graph3d.idToMesh.get(gd.id); if (m) attachNodeLabel(m, gd.id, gd.label); });
+  } else {
+    ensureFloatingHoverLabel();
+    syncFloatingLabelToHover();
   }
+  applyLabelFontSizes();
+  refreshSearchDimming();
+}
 
-  function stripAllNodeLabels() {
-    graph3d.idToLabel.forEach(lbl => {
-      if (lbl.parent) lbl.parent.remove(lbl);
-    });
-    graph3d.idToLabel.clear();
-  }
-
-  function ensureFloatingHoverLabel() {
-    if (graph3d.floatingLabel) return;
-    const div = document.createElement('div');
-    div.className = 'graph-node-label';
-    div.textContent = '';
-    const px = graph3d.labelFontPx > 0 ? graph3d.labelFontPx : 11;
-    div.style.fontSize = px + 'px';
-    div.style.fontFamily = '\'Segoe UI\', system-ui, sans-serif';
-    div.style.fontWeight = '500';
-    div.style.color = '#e8e8e8';
-    div.style.textShadow = '0 1px 2px #000, 0 0 10px rgba(26,26,46,0.95)';
-    div.style.maxWidth = 'min(220px, 38vw)';
-    div.style.textAlign = 'center';
-    div.style.lineHeight = '1.2';
-    div.style.wordBreak = 'break-word';
-    div.style.pointerEvents = 'none';
-    div.style.opacity = '1';
-    const label = new CSS2DObject(div);
-    label.center.set(0.5, 1);
-    graph3d.floatingLabel = label;
-  }
-
-  function syncFloatingLabelToHover() {
-    if (shouldAttachAllLabels()) return;
-    const fl = graph3d.floatingLabel;
-    if (!fl) return;
-    const id = graph3d.hoveredId;
-    if (!id) {
-      if (fl.parent) fl.parent.remove(fl);
-      graph3d._floatLabelNodeId = null;
-      return;
-    }
-    const mesh = graph3d.idToMesh.get(id);
-    if (!mesh || !mesh.visible) {
-      if (fl.parent) fl.parent.remove(fl);
-      graph3d._floatLabelNodeId = null;
-      return;
-    }
-    const sn = graph3d.idToSimNode.get(id);
-    fl.element.textContent = (sn && sn.label) ? String(sn.label).trim() || id : id;
-    const px = graph3d.labelFontPx > 0 ? graph3d.labelFontPx : 11;
-    fl.element.style.fontSize = px + 'px';
-    const reattach = fl.parent !== mesh || graph3d._floatLabelNodeId !== id;
-    if (reattach) {
-      mesh.geometry.computeBoundingSphere();
-      const bs = mesh.geometry.boundingSphere;
-      const r = bs && bs.radius > 0 ? bs.radius : 12;
-      fl.position.set(0, -r - Math.max(5, r * 0.14), 0);
-    }
-    if (fl.parent !== mesh) {
-      if (fl.parent) fl.parent.remove(fl);
-      mesh.add(fl);
-    }
-    graph3d._floatLabelNodeId = id;
-    const q = document.getElementById('search').value.trim().toLowerCase();
-    let opacity = '1';
-    if (q) {
-      const lab = (sn && sn.label) || '';
-      const match = id.toLowerCase().includes(q) || lab.toLowerCase().includes(q);
-      opacity = match ? '1' : '0.3';
-    }
-    fl.element.style.opacity = opacity;
-  }
-
-  function reapplyLabelMode() {
-    if (!graph3d.nodeGroup) return;
-    stripAllNodeLabels();
-    if (graph3d.floatingLabel && graph3d.floatingLabel.parent) {
-      graph3d.floatingLabel.parent.remove(graph3d.floatingLabel);
-    }
-    if (shouldAttachAllLabels()) {
-      graphData.nodes.forEach(gd => {
-        const mesh = graph3d.idToMesh.get(gd.id);
-        if (mesh) attachNodeLabel(mesh, gd.id, gd.label);
-      });
-    } else {
-      ensureFloatingHoverLabel();
-      syncFloatingLabelToHover();
-    }
-    applyLabelFontSizes();
-    refreshSearchDimming();
-  }
-
-  function applyLabelFontSizes() {
-    const px = graph3d.labelFontPx > 0 ? graph3d.labelFontPx : 11;
-    graph3d.idToLabel.forEach(lbl => {
-      if (lbl.element) lbl.element.style.fontSize = px + 'px';
-    });
-    if (graph3d.floatingLabel && graph3d.floatingLabel.element) {
-      graph3d.floatingLabel.element.style.fontSize = px + 'px';
-    }
-  }
-
-  function runHoverPickFromStoredEvent() {
-    graph3d.pickRafId = null;
-    const ev = graph3d.lastPickEv;
-    if (!ev || graph3d.pendingSelectNodeId || graph3d.draggingNodeId) return;
-    const id = pickNodeFromEvent(ev);
-    if (id !== graph3d.hoveredId) {
-      graph3d.hoveredId = id;
-      if (id) highlightNeighbors3d(id);
-      else resetNodeEmissiveAndOrphans();
-      if (!shouldAttachAllLabels()) syncFloatingLabelToHover();
-    }
-    if (graph3d.renderer && graph3d.renderer.domElement) {
-      graph3d.renderer.domElement.style.cursor = id ? 'grab' : '';
-    }
-  }
-
-  function scheduleHoverPick(ev) {
-    graph3d.lastPickEv = ev;
-    if (graph3d.pickRafId != null) return;
-    graph3d.pickRafId = requestAnimationFrame(() => {
-      runHoverPickFromStoredEvent();
-    });
-  }
-
-  function setMeshMaterialState(mesh, state) {
-    if (!mesh || !mesh.material) return;
-    mesh.material.color.copy(nodeColor(state));
-  }
-
-  function neighborIdsOf(nodeId) {
-    const s = new Set([nodeId]);
-    graphData.edges.forEach(e => {
-      if (e.source === nodeId) s.add(e.target);
-      if (e.target === nodeId) s.add(e.source);
-    });
-    return s;
-  }
-
-  function layoutSimulationBusy() {
-    const s = graph3d.simulation;
-    return !!(s && typeof s.alpha === 'function' && s.alpha() > 0.16);
-  }
-
-  function syncMeshesFromSim() {
-    graph3d.simNodes.forEach(n => {
-      const m = graph3d.idToMesh.get(n.id);
-      if (m) m.position.set(n.x || 0, n.y || 0, n.z || 0);
-    });
-    const relax = layoutSimulationBusy();
-    const dragging = graph3d.draggingNodeId != null;
-    if (dragging || !relax) {
-      updateEdgeLinePositions();
-      return;
-    }
-    const nN = graph3d.simNodes.length;
-    graph3d._simEdgeTick = (graph3d._simEdgeTick || 0) + 1;
-    const edgeEvery = nN > 280 ? 3 : (nN > 160 ? 2 : 1);
-    if (graph3d._simEdgeTick % edgeEvery === 0) updateEdgeLinePositions();
-  }
-
-  function updateEdgeLinePositions() {
-    if (!graph3d.edgeGeom || !graph3d._edgePairs) return;
-    const posAttr = graph3d.edgeGeom.attributes.position;
-    const arr = posAttr.array;
-    let i = 0;
-    graph3d._edgePairs.forEach(ep => {
-      if (ep.hidden) {
-        arr[i++] = arr[i++] = arr[i++] = 0;
-        arr[i++] = arr[i++] = arr[i++] = 0;
-        return;
-      }
-      const a = graph3d.idToSimNode.get(ep.src);
-      const b = graph3d.idToSimNode.get(ep.tgt);
-      if (!a || !b) {
-        arr[i++] = arr[i++] = arr[i++] = 0;
-        arr[i++] = arr[i++] = arr[i++] = 0;
-        return;
-      }
-      const ax = a.x ?? 0; const ay = a.y ?? 0; const az = a.z ?? 0;
-      const bx = b.x ?? 0; const by = b.y ?? 0; const bz = b.z ?? 0;
-      arr[i++] = ax; arr[i++] = ay; arr[i++] = az;
-      arr[i++] = bx; arr[i++] = by; arr[i++] = bz;
-    });
-    posAttr.needsUpdate = true;
-    graph3d.edgeBoundsStale = true;
-  }
-
-  function refreshEdgeBoundingSphereIfNeeded() {
-    if (graph3d.edgeGeom && graph3d.edgeBoundsStale) {
-      graph3d.edgeGeom.computeBoundingSphere();
-      graph3d.edgeBoundsStale = false;
-    }
-  }
-
-  function rebuildEdgeIndex() {
-    graph3d._edgePairs = graphData.edges.map(e => ({
-      src: e.source,
-      tgt: e.target,
-      type: e.type || 'member',
-      hidden: false
-    }));
-    const segCount = graph3d._edgePairs.length;
-    const positions = new Float32Array(segCount * 2 * 3);
-    graph3d.edgeGeom = new THREE.BufferGeometry();
-    graph3d.edgeGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    const colors = new Float32Array(segCount * 2 * 3);
-    const ctmp = new THREE.Color();
-    let ci = 0;
-    graph3d._edgePairs.forEach(ep => {
-      const hex = EDGE_COLORS[ep.type] || '#a8e6cf';
-      ctmp.set(hex);
-      colors[ci++] = ctmp.r; colors[ci++] = ctmp.g; colors[ci++] = ctmp.b;
-      colors[ci++] = ctmp.r; colors[ci++] = ctmp.g; colors[ci++] = ctmp.b;
-    });
-    graph3d.edgeGeom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    if (graph3d.edgeLine) {
-      graph3d.edgeGroup.remove(graph3d.edgeLine);
-      graph3d.edgeLine.geometry.dispose();
-      graph3d.edgeLine.material.dispose();
-    }
-    graph3d.edgeLine = new THREE.LineSegments(
-      graph3d.edgeGeom,
-      new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.5 })
-    );
-    graph3d.edgeLine.frustumCulled = false;
-    graph3d.edgeGroup.add(graph3d.edgeLine);
-    graph3d.edgeGeom.computeBoundingSphere();
-    graph3d.edgeBoundsStale = false;
-  }
-
-  function scheduleLayoutSave() {
-    if (graph3d.layoutSaveTimer) clearTimeout(graph3d.layoutSaveTimer);
-    graph3d.layoutSaveTimer = setTimeout(() => {
-      graph3d.layoutSaveTimer = null;
-      saveLayoutToStorage();
-    }, 400);
-  }
-
-  function startForceSimulation() {
-    if (graph3d.simulation) graph3d.simulation.stop();
-    const linkData = graphData.edges.map(e => ({
-      source: e.source,
-      target: e.target
-    }));
-    const n = graph3d.simNodes.length;
-    const large = n > LARGE_GRAPH_LABEL_THRESHOLD;
-    const linkDist = large ? 72 : 100;
-    const linkStr = large ? 0.5 : 0.62;
-    const charge = large ? -95 : -240;
-    const decay = large ? 0.055 : 0.028;
-    const vDecay = large ? 0.52 : 0.42;
-    const alphaMin = large ? 0.035 : 0.02;
-    graph3d._simEdgeTick = 0;
-    const chargeForce = forceManyBody().strength(charge).theta(0.88);
-    graph3d.simulation = forceSimulation(graph3d.simNodes, 3)
-      .force('link', forceLink(linkData).id(d => d.id).distance(linkDist).strength(linkStr))
-      .force('charge', chargeForce)
-      .force('center', forceCenter(0, 0, 0))
-      .velocityDecay(vDecay)
-      .alphaMin(alphaMin)
-      .alphaDecay(decay)
-      .on('tick', () => syncMeshesFromSim())
-      .on('end', () => {
-        updateEdgeLinePositions();
-        refreshEdgeBoundingSphereIfNeeded();
-        scheduleLayoutSave();
-        applyOrbitCameraLimits();
-      });
-  }
-
-  function updateDebugCamPanel() {
-    const panel = document.getElementById('debug-cam-panel');
-    const toggle = document.getElementById('debug-cam-toggle');
-    if (!panel || !toggle) return;
-    if (!toggle.checked) {
-      panel.classList.remove('visible');
-      panel.textContent = '';
-      return;
-    }
-    panel.classList.add('visible');
-    const cam = graph3d.camera;
-    const ctl = graph3d.controls;
-    if (!cam || !ctl) {
-      panel.textContent = '—';
-      return;
-    }
-    const p = cam.position;
-    const t = ctl.target;
-    const dx = p.x - t.x;
-    const dy = p.y - t.y;
-    const dz = p.z - t.z;
-    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    const minD = ctl.minDistance;
-    const maxD = ctl.maxDistance;
-    const span = maxD - minD;
-    const zoomPct = span > 1e-6 ? ((dist - minD) / span) * 100 : 0;
-    let polar = '—';
-    let azim = '—';
-    try {
-      if (typeof ctl.getPolarAngle === 'function') polar = (ctl.getPolarAngle() * 180 / Math.PI).toFixed(1) + '°';
-      if (typeof ctl.getAzimuthalAngle === 'function') azim = (ctl.getAzimuthalAngle() * 180 / Math.PI).toFixed(1) + '°';
-    } catch (e) { /* ignore */ }
-    const gb = getVisibleGraphBounds();
-    const rVis = gb ? gb.radius.toFixed(0) : '—';
-    let visN = 0;
-    graph3d.idToMesh.forEach(m => {
-      if (m.visible) visN++;
-    });
-    const dpr = window.devicePixelRatio;
-    const dprOr = Number(dpr) || 0;
-    const lines = [
-      `dist ${dist.toFixed(1)}  (min ${minD.toFixed(1)} … max ${maxD.toFixed(1)})`,
-      `zoom ${zoomPct.toFixed(1)}% of range  |  near/far ${cam.near.toFixed(2)} / ${cam.far.toFixed(0)}`,
-      `cam  ${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}`,
-      `tgt  ${t.x.toFixed(1)}, ${t.y.toFixed(1)}, ${t.z.toFixed(1)}`,
-      `polar ${polar}  azim ${azim}  fov ${cam.fov}°`,
-      `panSp ${ctl.panSpeed}  zoomSp ${ctl.zoomSpeed}  damp ${ctl.dampingFactor}  en ${ctl.enabled}  spin ${ctl.autoRotate}@${ctl.autoRotateSpeed}`,
-      `hover ${graph3d.hoveredId || '—'}  |  vis ${visN}/${graphData.nodes.length}  r≈${rVis}`,
-      `wheel ${graph3d._wheelZoomUsesSafeFix ? 'safe (DPR|0=0 fix)' : 'three.js'}  |  dpr ${dpr}  (|0)=${dprOr | 0}`,
-      `edges ${graphData.edges.length}`
-    ];
-    panel.textContent = lines.join('\n');
-  }
-
-  function animateGraph3dLoop() {
-    graph3d.rafId = requestAnimationFrame(animateGraph3dLoop);
-    graph3d._frameIdx = (graph3d._frameIdx || 0) + 1;
-    if (graph3d.controls) graph3d.controls.update();
-    if (document.getElementById('debug-cam-toggle') && document.getElementById('debug-cam-toggle').checked) {
-      if ((graph3d._frameIdx & 1) === 0) updateDebugCamPanel();
-    }
-    if (graph3d.renderer && graph3d.scene && graph3d.camera) {
-      graph3d.renderer.render(graph3d.scene, graph3d.camera);
-    }
-    if (graph3d.css2dRenderer && graph3d.scene && graph3d.camera) {
-      const nLab = graph3d.idToLabel.size + (graph3d.floatingLabel && graph3d.floatingLabel.parent ? 1 : 0);
-      const throttleCss = nLab > 90 && (graph3d._frameIdx % 2 === 0);
-      if (!throttleCss) graph3d.css2dRenderer.render(graph3d.scene, graph3d.camera);
-    }
-  }
-
-  function onGraphResize() {
-    const container = document.getElementById('graph-container');
-    if (!graph3d.renderer || !graph3d.camera || !container) return;
-    const w = Math.max(container.clientWidth, 100);
-    const h = Math.max(container.clientHeight, 100);
-    graph3d.camera.aspect = w / h;
-    graph3d.camera.updateProjectionMatrix();
-    graph3d.renderer.setSize(w, h);
-    if (graph3d.css2dRenderer) graph3d.css2dRenderer.setSize(w, h);
-  }
-
-  function getVisibleGraphBounds() {
-    const box = new THREE.Box3();
-    graph3d.idToMesh.forEach(mesh => {
-      if (mesh.visible) box.expandByPoint(mesh.position);
-    });
-    if (box.isEmpty()) return null;
-    const sphere = new THREE.Sphere();
-    box.getBoundingSphere(sphere);
-    let r = sphere.radius;
-    if (!Number.isFinite(r) || r <= 0) r = 80;
-    r = Math.max(r, 45);
-    return { center: sphere.center.clone(), radius: r };
-  }
-
-  /**
-   * Gros graphes : il faut far assez grand pour que maxDistance >> minDistance (sinon ~4× seulement → zoom « binaire »).
-   * minDistance>0 évite l’orbite dégénérée ; zoomSpeed bas = molette plus progressive.
-   */
-  function applyOrbitCameraLimits(bounds) {
-    if (!graph3d.camera || !graph3d.controls) return;
-    const b = bounds || getVisibleGraphBounds();
-    if (!b) return;
-    const r = Math.max(b.radius, 40);
-    const n = graphData.nodes.length;
-    const minD = Math.max(5, r * 0.01);
-    const maxDDesired = Math.max(minD * 18, r * 40 + 16000);
-    const far = Math.min(850000, Math.max(48000, maxDDesired + r + 35000));
-    const maxD = Math.max(minD * 2, Math.min(maxDDesired, far - r - 8000));
-    graph3d.camera.near = Math.max(0.15, Math.min(4, r * 0.00035));
-    graph3d.camera.far = far;
-    graph3d.camera.updateProjectionMatrix();
-    graph3d.controls.minDistance = minD;
-    graph3d.controls.maxDistance = maxD;
-    if (n > LARGE_GRAPH_LABEL_THRESHOLD) {
-      graph3d.controls.zoomSpeed = 0.17;
-      graph3d.controls.panSpeed = 3.4;
-    } else if (n > 80) {
-      graph3d.controls.zoomSpeed = 0.36;
-      graph3d.controls.panSpeed = 2.6;
-    } else {
-      graph3d.controls.zoomSpeed = 0.58;
-      graph3d.controls.panSpeed = 2;
-    }
-  }
-
-  function syncAutoRotateFromUI() {
-    const ar = document.getElementById('auto-rotate');
-    if (!graph3d.controls || !ar) return;
-    graph3d.controls.autoRotateSpeed = AUTO_ROTATE_SPEED;
-    graph3d.controls.autoRotate = !!ar.checked;
-  }
-
-  function centerCameraOnGraph() {
-    if (!graph3d.camera || !graph3d.controls || !graph3d.idToMesh.size) return;
-    const b = getVisibleGraphBounds();
-    if (!b) return;
-    applyOrbitCameraLimits(b);
-    const { center, radius: r } = b;
-    const minD = graph3d.controls.minDistance;
-    const maxD = graph3d.controls.maxDistance;
-    const dist = THREE.MathUtils.clamp(r * 1.58, minD * 1.35, maxD * 0.92);
-    graph3d.controls.target.copy(center);
-    graph3d.camera.position.set(center.x + dist * 0.85, center.y + dist * 0.65, center.z + dist * 0.9);
-    graph3d.controls.update();
-  }
-
-  function pickNodeFromEvent(ev) {
-    if (!graph3d.raycaster || !graph3d.camera || !graph3d.renderer) return null;
-    const rect = graph3d.renderer.domElement.getBoundingClientRect();
-    graph3d.pointerNdc.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-    graph3d.pointerNdc.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
-    graph3d.raycaster.setFromCamera(graph3d.pointerNdc, graph3d.camera);
-    const hits = graph3d.raycaster.intersectObjects(graph3d.nodeGroup.children, false)
-      .filter(h => h.object.visible);
-    return hits.length ? hits[0].object.userData.nodeId : null;
-  }
-
-  const DRAG_THRESHOLD_PX = 5;
-
-  function beginNodeDragGesture(ev, id) {
-    ev.stopPropagation();
-    if (graph3d.controls) graph3d.controls.enabled = false;
-    graph3d.pendingSelectNodeId = null;
-    graph3d.draggingNodeId = id;
-    graph3d.dragIsActive = false;
-    graph3d.dragStartClient = { x: ev.clientX, y: ev.clientY };
-    try {
-      ev.currentTarget.setPointerCapture(ev.pointerId);
-    } catch (err) { /* ignore */ }
-    ev.currentTarget.style.cursor = 'grabbing';
-  }
-
-  function applyArmedNodeEmissiveOverlay() {
-    const armed = graph3d.armDragNodeId;
-    if (!armed) return;
-    const mesh = graph3d.idToMesh.get(armed);
-    if (!mesh || !mesh.visible || !mesh.material || !mesh.material.emissive) return;
-    mesh.material.emissive.setHex(0x3d8b6e);
-    mesh.material.emissiveIntensity = 0.44;
-  }
-
-  function refreshEmissiveAfterArmChange() {
-    if (graph3d.hoveredId) highlightNeighbors3d(graph3d.hoveredId);
-    else resetNodeEmissiveAndOrphans();
-  }
-
-  function ensureDragPlanes() {
-    if (!graph3d.dragPlane) {
-      graph3d.dragPlane = new THREE.Plane();
-      graph3d.dragPlaneAnchor = new THREE.Vector3();
-      graph3d.dragHit = new THREE.Vector3();
-      graph3d.dragTmpDir = new THREE.Vector3();
-    }
-  }
-
-  function onCanvasPointerDown(ev) {
-    if (ev.button !== 0 || !graph3d.raycaster || !graph3d.nodeGroup) return;
-    const id = pickNodeFromEvent(ev);
-    if (!id) {
-      graph3d.armDragNodeId = null;
-      refreshEmissiveAfterArmChange();
-      return;
-    }
-    /* Premier clic sur le nœud = armer au relâchement ; second clic = glisser-déposer. Glisser sur le vide = caméra. */
-    if (graph3d.armDragNodeId === id) {
-      beginNodeDragGesture(ev, id);
-      return;
-    }
-    ev.stopPropagation();
-    if (graph3d.controls) graph3d.controls.enabled = false;
-    graph3d.pendingSelectNodeId = id;
-    graph3d.draggingNodeId = null;
-    graph3d.dragIsActive = false;
-    graph3d.dragStartClient = { x: ev.clientX, y: ev.clientY };
-    try {
-      ev.currentTarget.setPointerCapture(ev.pointerId);
-    } catch (err) { /* ignore */ }
-    ev.currentTarget.style.cursor = 'pointer';
-  }
-
-  function onCanvasPointerUp(ev) {
-    const el = graph3d.renderer && graph3d.renderer.domElement;
-    if (graph3d.pendingSelectNodeId) {
-      const pid = graph3d.pendingSelectNodeId;
-      graph3d.pendingSelectNodeId = null;
-      if (el) {
-        try {
-          if (el.hasPointerCapture(ev.pointerId)) el.releasePointerCapture(ev.pointerId);
-        } catch (err) { /* ignore */ }
-        el.style.cursor = '';
-      }
-      if (graph3d.controls) graph3d.controls.enabled = true;
-      graph3d.armDragNodeId = pid;
-      refreshEmissiveAfterArmChange();
-      return;
-    }
-    if (!graph3d.draggingNodeId) return;
-    if (el) {
-      try {
-        if (el.hasPointerCapture(ev.pointerId)) el.releasePointerCapture(ev.pointerId);
-      } catch (err) { /* ignore */ }
-      el.style.cursor = '';
-    }
-    const n = graph3d.idToSimNode.get(graph3d.draggingNodeId);
-    if (n) {
-      n.fx = n.fy = n.fz = null;
-      n.vx = n.vy = n.vz = 0;
-    }
-    if (graph3d.dragIsActive) {
-      graph3d.suppressNextClick = true;
-      if (graph3d.simulation) graph3d.simulation.alphaTarget(0);
-      scheduleLayoutSave();
-    }
-    if (graph3d.controls) graph3d.controls.enabled = true;
-    graph3d.draggingNodeId = null;
-    graph3d.dragIsActive = false;
-    updateEdgeLinePositions();
-    refreshEdgeBoundingSphereIfNeeded();
-  }
-
-  function resetNodeEmissiveAndOrphans() {
-    const showOrphans = document.getElementById('orphans') && document.getElementById('orphans').checked;
-    const withEdges = new Set();
-    graphData.edges.forEach(e => {
-      withEdges.add(e.source);
-      withEdges.add(e.target);
-    });
-    graph3d.idToMesh.forEach((mesh, id) => {
-      if (!mesh.material || !mesh.material.emissive) return;
-      mesh.material.emissive.setHex(0x000000);
-      mesh.material.emissiveIntensity = 0.12;
-      if (showOrphans && !withEdges.has(id) && mesh.visible) {
-        mesh.material.emissive.setHex(0xff9a8b);
-        mesh.material.emissiveIntensity = 0.38;
-      }
-    });
-    applyArmedNodeEmissiveOverlay();
-  }
-
-  function highlightNeighbors3d(nodeId) {
-    if (!nodeId) {
-      resetNodeEmissiveAndOrphans();
-      return;
-    }
-    const nb = neighborIdsOf(nodeId);
-    graph3d.idToMesh.forEach((mesh, id) => {
-      if (!mesh.material || !mesh.material.emissive) return;
-      if (nb.has(id)) {
-        mesh.material.emissive.setHex(0xffecd2);
-        mesh.material.emissiveIntensity = 0.45;
-      } else {
-        mesh.material.emissive.setHex(0x000000);
-        mesh.material.emissiveIntensity = 0.1;
-      }
-    });
-    applyArmedNodeEmissiveOverlay();
-  }
-
-  function applyGraphVisualFilters() {
-    const checked = new Set(
-      Array.from(document.querySelectorAll('.domain-filter:checked')).map(c => c.dataset.domain)
-    );
-    const showOrphans = document.getElementById('orphans') && document.getElementById('orphans').checked;
-    const withEdges = new Set();
-    graphData.edges.forEach(e => {
-      withEdges.add(e.source);
-      withEdges.add(e.target);
-    });
-    graph3d.idToMesh.forEach((mesh, id) => {
-      const dom = mesh.userData.domain;
-      mesh.visible = checked.has(dom);
-      mesh.userData.isOrphan = !!(showOrphans && !withEdges.has(id) && mesh.visible);
-    });
-    if (graph3d._edgePairs) {
-      const idHidden = nid => {
-        const m = graph3d.idToMesh.get(nid);
-        return !m || !m.visible;
-      };
-      graph3d._edgePairs.forEach(ep => {
-        ep.hidden = idHidden(ep.src) || idHidden(ep.tgt);
-      });
-    }
-    updateEdgeLinePositions();
-    refreshSearchDimming();
-    if (graph3d.hoveredId) highlightNeighbors3d(graph3d.hoveredId);
-    else resetNodeEmissiveAndOrphans();
-    applyOrbitCameraLimits();
-  }
-
-  function refreshSearchDimming() {
-    const q = document.getElementById('search').value.trim().toLowerCase();
-    const shapeF = graph3d.shapeSizeFactor > 0 ? graph3d.shapeSizeFactor : 1;
-    graph3d.idToMesh.forEach((mesh, id) => {
-      if (!mesh.material) return;
-      const sn = graph3d.idToSimNode.get(id);
-      if (!mesh.userData.baseScale) mesh.userData.baseScale = 1;
-      const base = mesh.userData.baseScale;
-      let mult = 1;
-      let opacity = 1;
-      if (!q) {
-        mesh.material.transparent = false;
-      } else {
-        const lab = (sn && sn.label) || '';
-        const match = id.toLowerCase().includes(q) || lab.toLowerCase().includes(q);
-        mult = match ? 1.18 : 0.72;
-        opacity = match ? 1 : 0.3;
-        mesh.material.transparent = true;
-      }
-      mesh.scale.setScalar(base * shapeF * mult);
-      mesh.material.opacity = opacity;
-      const cssLbl = graph3d.idToLabel.get(id);
-      if (cssLbl && cssLbl.element) cssLbl.element.style.opacity = String(opacity);
-    });
+// ── Hover picking ─────────────────────────────────────────────────────────────
+function runHoverPickFromStoredEvent() {
+  graph3d.pickRafId = null;
+  const ev = graph3d.lastPickEv;
+  if (!ev || graph3d.pendingSelectNodeId || graph3d.draggingNodeId) return;
+  const id = pickNodeFromEvent(ev);
+  if (id !== graph3d.hoveredId) {
+    graph3d.hoveredId = id;
+    if (id) highlightNeighbors3d(id); else resetNodeEmissiveAndOrphans();
     if (!shouldAttachAllLabels()) syncFloatingLabelToHover();
   }
+  if (graph3d.renderer?.domElement) graph3d.renderer.domElement.style.cursor = id ? 'grab' : '';
+}
 
-  function onCanvasClick(ev) {
-    if (graph3d.suppressNextClick) {
-      graph3d.suppressNextClick = false;
-      return;
+function scheduleHoverPick(ev) {
+  graph3d.lastPickEv = ev;
+  if (graph3d.pickRafId != null) return;
+  graph3d.pickRafId = requestAnimationFrame(() => runHoverPickFromStoredEvent());
+}
+
+// ── Mesh state ────────────────────────────────────────────────────────────────
+function setMeshMaterialState(mesh, nodeId, state) {
+  if (mesh?.material) mesh.material.color.copy(nodeColorLive(nodeId, state));
+}
+
+function neighborIdsOf(nodeId) {
+  const s = new Set([nodeId]);
+  graphData.edges.forEach(e => { if (e.source === nodeId) s.add(e.target); if (e.target === nodeId) s.add(e.source); });
+  return s;
+}
+
+// ── Sim / edge update ─────────────────────────────────────────────────────────
+function layoutSimulationBusy() {
+  const s = graph3d.simulation;
+  return !!(s && typeof s.alpha === 'function' && s.alpha() > 0.16);
+}
+
+function syncMeshesFromSim() {
+  graph3d.simNodes.forEach(n => { const m = graph3d.idToMesh.get(n.id); if (m) m.position.set(n.x||0, n.y||0, n.z||0); });
+  const relax = layoutSimulationBusy(), dragging = graph3d.draggingNodeId != null;
+  if (dragging || !relax) { updateEdgeLinePositions(); return; }
+  const nN = graph3d.simNodes.length;
+  graph3d._simEdgeTick = (graph3d._simEdgeTick||0) + 1;
+  const edgeEvery = nN > 280 ? 3 : (nN > 160 ? 2 : 1);
+  if (graph3d._simEdgeTick % edgeEvery === 0) updateEdgeLinePositions();
+}
+
+function updateEdgeLinePositions() {
+  if (!graph3d.edgeGeom || !graph3d._edgePairs) return;
+  const posAttr = graph3d.edgeGeom.attributes.position, arr = posAttr.array;
+  let i = 0;
+  graph3d._edgePairs.forEach(ep => {
+    if (ep.hidden) { arr[i++]=arr[i++]=arr[i++]=arr[i++]=arr[i++]=arr[i++]=0; return; }
+    const a = graph3d.idToSimNode.get(ep.src), b = graph3d.idToSimNode.get(ep.tgt);
+    if (!a || !b) { arr[i++]=arr[i++]=arr[i++]=arr[i++]=arr[i++]=arr[i++]=0; return; }
+    arr[i++]=a.x??0; arr[i++]=a.y??0; arr[i++]=a.z??0;
+    arr[i++]=b.x??0; arr[i++]=b.y??0; arr[i++]=b.z??0;
+  });
+  posAttr.needsUpdate = true;
+  graph3d.edgeBoundsStale = true;
+}
+
+function refreshEdgeBoundingSphereIfNeeded() {
+  if (graph3d.edgeGeom && graph3d.edgeBoundsStale) { graph3d.edgeGeom.computeBoundingSphere(); graph3d.edgeBoundsStale = false; }
+}
+
+function rebuildEdgeIndex() {
+  graph3d._edgePairs = graphData.edges.map(e => ({ src:e.source, tgt:e.target, type:e.type||'member', hidden:false }));
+  const segCount = graph3d._edgePairs.length;
+  const positions = new Float32Array(segCount * 6);
+  graph3d.edgeGeom = new THREE.BufferGeometry();
+  graph3d.edgeGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const colors = new Float32Array(segCount * 6), ctmp = new THREE.Color();
+  let ci = 0;
+  graph3d._edgePairs.forEach(ep => {
+    ctmp.set(EDGE_COLORS[ep.type] || '#a8e6cf');
+    colors[ci++]=ctmp.r; colors[ci++]=ctmp.g; colors[ci++]=ctmp.b;
+    colors[ci++]=ctmp.r; colors[ci++]=ctmp.g; colors[ci++]=ctmp.b;
+  });
+  graph3d.edgeGeom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  if (graph3d.edgeLine) { graph3d.edgeGroup.remove(graph3d.edgeLine); graph3d.edgeLine.geometry.dispose(); graph3d.edgeLine.material.dispose(); }
+  graph3d.edgeLine = new THREE.LineSegments(
+    graph3d.edgeGeom,
+    new THREE.LineBasicMaterial({ vertexColors:true, transparent:true, opacity:0.5 })
+  );
+  graph3d.edgeLine.frustumCulled = false;
+  graph3d.edgeGroup.add(graph3d.edgeLine);
+  graph3d.edgeGeom.computeBoundingSphere();
+  graph3d.edgeBoundsStale = false;
+}
+
+function scheduleLayoutSave() {
+  if (graph3d.layoutSaveTimer) clearTimeout(graph3d.layoutSaveTimer);
+  graph3d.layoutSaveTimer = setTimeout(() => { graph3d.layoutSaveTimer = null; saveLayoutToStorage(); }, 400);
+}
+
+function startForceSimulation() {
+  if (graph3d.simulation) graph3d.simulation.stop();
+  const n = graph3d.simNodes.length;
+  const large = n > LARGE_GRAPH_LABEL_THRESHOLD;
+  graph3d._simEdgeTick = 0;
+  graph3d.simulation = forceSimulation(graph3d.simNodes, 3)
+    .force('link', forceLink(graphData.edges.map(e => ({ source:e.source, target:e.target }))).id(d => d.id).distance(large?72:100).strength(large?0.5:0.62))
+    .force('charge', forceManyBody().strength(large?-95:-240).theta(0.88))
+    .force('center', forceCenter(0, 0, 0))
+    .velocityDecay(large?0.52:0.42)
+    .alphaMin(large?0.035:0.02)
+    .alphaDecay(large?0.055:0.028)
+    .on('tick', () => syncMeshesFromSim())
+    .on('end', () => {
+      updateEdgeLinePositions();
+      refreshEdgeBoundingSphereIfNeeded();
+      scheduleLayoutSave();
+      applyOrbitCameraLimits();
+    });
+}
+
+// ── Debug camera panel ────────────────────────────────────────────────────────
+function updateDebugCamPanel() {
+  const panel = document.getElementById('debug-cam-panel');
+  const toggle = document.getElementById('debug-cam-toggle');
+  if (!panel || !toggle) return;
+  if (!toggle.checked) { panel.classList.remove('visible'); panel.textContent = ''; return; }
+  panel.classList.add('visible');
+  const cam = graph3d.camera, ctl = graph3d.controls;
+  if (!cam || !ctl) { panel.textContent = '—'; return; }
+  const p = cam.position, tg = ctl.target;
+  const dist = Math.sqrt((p.x-tg.x)**2 + (p.y-tg.y)**2 + (p.z-tg.z)**2);
+  const span = ctl.maxDistance - ctl.minDistance;
+  const zoomPct = span > 1e-6 ? ((dist - ctl.minDistance) / span) * 100 : 0;
+  let polar = '—', azim = '—';
+  try {
+    if (typeof ctl.getPolarAngle === 'function') polar = (ctl.getPolarAngle() * 180/Math.PI).toFixed(1) + '°';
+    if (typeof ctl.getAzimuthalAngle === 'function') azim = (ctl.getAzimuthalAngle() * 180/Math.PI).toFixed(1) + '°';
+  } catch (e) {}
+  const gb = getVisibleGraphBounds();
+  let visN = 0;
+  graph3d.idToMesh.forEach(m => { if (m.visible) visN++; });
+  const dpr = window.devicePixelRatio;
+  panel.textContent = [
+    `dist ${dist.toFixed(1)}  (min ${ctl.minDistance.toFixed(1)} … max ${ctl.maxDistance.toFixed(1)})`,
+    `zoom ${zoomPct.toFixed(1)}% of range  |  near/far ${cam.near.toFixed(2)} / ${cam.far.toFixed(0)}`,
+    `cam  ${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}`,
+    `tgt  ${tg.x.toFixed(1)}, ${tg.y.toFixed(1)}, ${tg.z.toFixed(1)}`,
+    `polar ${polar}  azim ${azim}  fov ${cam.fov}°`,
+    `panSp ${ctl.panSpeed}  zoomSp ${ctl.zoomSpeed}  damp ${ctl.dampingFactor}  spin ${ctl.autoRotate}@${ctl.autoRotateSpeed}`,
+    `hover ${graph3d.hoveredId||'—'}  |  vis ${visN}/${graphData.nodes.length}  r≈${gb?gb.radius.toFixed(0):'—'}`,
+    `wheel ${graph3d._wheelZoomUsesSafeFix?'safe (DPR|0=0 fix)':'three.js'}  |  dpr ${dpr}  (|0)=${Number(dpr)|0}`,
+    `edges ${graphData.edges.length}`
+  ].join('\n');
+}
+
+// ── Active animations (flash / pulse) ────────────────────────────────────────
+function _processActiveAnimations() {
+  const now = performance.now();
+  graph3d.activeAnimations = graph3d.activeAnimations.filter(anim => {
+    const mesh = graph3d.idToMesh.get(anim.nodeId);
+    if (!mesh) return false;
+    const elapsed = now - anim.t0;
+    const progress = Math.min(1, elapsed / anim.duration);
+    if (anim.type === 'flash') {
+      // 0→0.3: white flash; 0.3→1: fade back to original colour
+      const phase = progress < 0.3 ? progress / 0.3 : (progress - 0.3) / 0.7;
+      if (progress < 0.3) {
+        mesh.material.emissive.setHex(0xffffff);
+        mesh.material.emissiveIntensity = phase * 0.9;
+      } else {
+        mesh.material.emissive.setHex(0x000000);
+        mesh.material.emissiveIntensity = (1 - phase) * 0.9;
+      }
     }
-    const id = pickNodeFromEvent(ev);
-    if (id) openSidebar(id);
-  }
+    if (anim.type === 'pulse') {
+      // 0→0.5: grow; 0.5→1: shrink back
+      const s = anim.baseScale * (1 + 0.45 * Math.sin(Math.PI * progress));
+      mesh.scale.setScalar(s * (graph3d.shapeSizeFactor || 1));
+    }
+    if (progress >= 1) {
+      // Restore emissive state after animation ends
+      if (anim.type === 'flash') {
+        mesh.material.emissive.setHex(0x000000);
+        mesh.material.emissiveIntensity = 0.12;
+      }
+      if (anim.type === 'pulse') {
+        mesh.scale.setScalar(anim.baseScale * (graph3d.shapeSizeFactor || 1));
+      }
+      return false;
+    }
+    return true;
+  });
+}
 
-  function onCanvasPointerMove(ev) {
-    if (graph3d.pendingSelectNodeId) return;
-    if (graph3d.draggingNodeId) {
-      ensureDragPlanes();
-      const sc = graph3d.dragStartClient;
-      const dx = ev.clientX - sc.x;
-      const dy = ev.clientY - sc.y;
-      if (!graph3d.dragIsActive && (dx * dx + dy * dy) >= DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) {
-        graph3d.dragIsActive = true;
-        const mesh = graph3d.idToMesh.get(graph3d.draggingNodeId);
-        const n = graph3d.idToSimNode.get(graph3d.draggingNodeId);
-        if (mesh && n) {
-          graph3d.dragPlaneAnchor.copy(mesh.position);
-          graph3d.camera.getWorldDirection(graph3d.dragTmpDir);
-          graph3d.dragPlane.setFromNormalAndCoplanarPoint(graph3d.dragTmpDir, graph3d.dragPlaneAnchor);
-          n.fx = n.x;
-          n.fy = n.y;
-          n.fz = n.z;
-        }
-        if (!graph3d.simulation && graph3d.simNodes.length) startForceSimulation();
-        if (graph3d.simulation) {
-          graph3d.simulation.alphaTarget(0.22).alpha(Math.max(graph3d.simulation.alpha(), 0.38));
+// ── Active particles (edge propagation) ──────────────────────────────────────
+function _processActiveParticles() {
+  const now = performance.now();
+  graph3d.activeParticles = graph3d.activeParticles.filter(p => {
+    const elapsed = now - p.t0;
+    const progress = Math.min(1, elapsed / p.duration);
+    const a = graph3d.idToSimNode.get(p.src);
+    const b = graph3d.idToSimNode.get(p.tgt);
+    if (a && b) {
+      p.mesh.position.set(
+        a.x + (b.x - a.x) * progress,
+        a.y + (b.y - a.y) * progress,
+        a.z + (b.z - a.z) * progress
+      );
+      p.mesh.material.opacity = progress < 0.15 ? progress / 0.15 : progress > 0.85 ? (1 - progress) / 0.15 : 1;
+    }
+    if (progress >= 1) {
+      if (p.mesh.parent) p.mesh.parent.remove(p.mesh);
+      p.mesh.geometry.dispose();
+      p.mesh.material.dispose();
+      return false;
+    }
+    return true;
+  });
+}
+
+// ── Render loop ───────────────────────────────────────────────────────────────
+function animateGraph3dLoop() {
+  graph3d.rafId = requestAnimationFrame(animateGraph3dLoop);
+  graph3d._frameIdx = (graph3d._frameIdx||0) + 1;
+  if (graph3d.controls) graph3d.controls.update();
+  if (graph3d.activeAnimations.length) _processActiveAnimations();
+  if (graph3d.activeParticles.length)  _processActiveParticles();
+  if (document.getElementById('debug-cam-toggle')?.checked && (graph3d._frameIdx & 1) === 0) updateDebugCamPanel();
+  if (graph3d.renderer && graph3d.scene && graph3d.camera) graph3d.renderer.render(graph3d.scene, graph3d.camera);
+  if (graph3d.css2dRenderer && graph3d.scene && graph3d.camera) {
+    const nLab = graph3d.idToLabel.size + (graph3d.floatingLabel?.parent ? 1 : 0);
+    if (!(nLab > 90 && (graph3d._frameIdx % 2 === 0))) graph3d.css2dRenderer.render(graph3d.scene, graph3d.camera);
+  }
+}
+
+// ── Camera / bounds ───────────────────────────────────────────────────────────
+function onGraphResize() {
+  const container = document.getElementById('graph-container');
+  if (!graph3d.renderer || !graph3d.camera || !container) return;
+  const w = Math.max(container.clientWidth, 100), h = Math.max(container.clientHeight, 100);
+  graph3d.camera.aspect = w / h;
+  graph3d.camera.updateProjectionMatrix();
+  graph3d.renderer.setSize(w, h);
+  if (graph3d.css2dRenderer) graph3d.css2dRenderer.setSize(w, h);
+}
+
+function getVisibleGraphBounds() {
+  const box = new THREE.Box3();
+  graph3d.idToMesh.forEach(mesh => { if (mesh.visible) box.expandByPoint(mesh.position); });
+  if (box.isEmpty()) return null;
+  const sphere = new THREE.Sphere();
+  box.getBoundingSphere(sphere);
+  let r = sphere.radius;
+  if (!Number.isFinite(r) || r <= 0) r = 80;
+  r = Math.max(r, 45);
+  return { center: sphere.center.clone(), radius: r };
+}
+
+/**
+ * Set OrbitControls distance limits from the visible graph bounds.
+ *
+ * far cap: 850000  → z-buffer precision floor (WebGL clips geometry beyond far)
+ * far min: 48000   → minimum so the whole graph fits even before force layout finishes
+ */
+function applyOrbitCameraLimits(bounds) {
+  if (!graph3d.camera || !graph3d.controls) return;
+  const b = bounds || getVisibleGraphBounds();
+  if (!b) return;
+  const r = Math.max(b.radius, 40), n = graphData.nodes.length;
+  const minD = Math.max(5, r * 0.01);
+  const maxDDesired = Math.max(minD * 18, r * 40 + 16000);
+  const far = Math.min(850000, Math.max(48000, maxDDesired + r + 35000));
+  const maxD = Math.max(minD * 2, Math.min(maxDDesired, far - r - 8000));
+  graph3d.camera.near = Math.max(0.15, Math.min(4, r * 0.00035));
+  graph3d.camera.far = far;
+  graph3d.camera.updateProjectionMatrix();
+  graph3d.controls.minDistance = minD;
+  graph3d.controls.maxDistance = maxD;
+  graph3d.controls.zoomSpeed = n > LARGE_GRAPH_LABEL_THRESHOLD ? 0.17 : (n > 80 ? 0.36 : 0.58);
+  graph3d.controls.panSpeed  = n > LARGE_GRAPH_LABEL_THRESHOLD ? 3.4  : (n > 80 ? 2.6  : 2);
+}
+
+function syncAutoRotateFromUI() {
+  const ar = document.getElementById('auto-rotate');
+  if (!graph3d.controls || !ar) return;
+  graph3d.controls.autoRotateSpeed = AUTO_ROTATE_SPEED;
+  graph3d.controls.autoRotate = !!ar.checked;
+}
+
+function centerCameraOnGraph() {
+  if (!graph3d.camera || !graph3d.controls || !graph3d.idToMesh.size) return;
+  const b = getVisibleGraphBounds();
+  if (!b) return;
+  applyOrbitCameraLimits(b);
+  const { center, radius: r } = b;
+  const dist = THREE.MathUtils.clamp(r * 1.58, graph3d.controls.minDistance * 1.35, graph3d.controls.maxDistance * 0.92);
+  graph3d.controls.target.copy(center);
+  graph3d.camera.position.set(center.x + dist*0.85, center.y + dist*0.65, center.z + dist*0.9);
+  graph3d.controls.update();
+}
+
+// ── Pointer picking ───────────────────────────────────────────────────────────
+function pickNodeFromEvent(ev) {
+  if (!graph3d.raycaster || !graph3d.camera || !graph3d.renderer) return null;
+  const rect = graph3d.renderer.domElement.getBoundingClientRect();
+  graph3d.pointerNdc.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+  graph3d.pointerNdc.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+  graph3d.raycaster.setFromCamera(graph3d.pointerNdc, graph3d.camera);
+  const hits = graph3d.raycaster.intersectObjects(graph3d.nodeGroup.children, false).filter(h => h.object.visible);
+  return hits.length ? hits[0].object.userData.nodeId : null;
+}
+
+const DRAG_THRESHOLD_PX = 5;
+
+function beginNodeDragGesture(ev, id) {
+  ev.stopPropagation();
+  if (graph3d.controls) graph3d.controls.enabled = false;
+  graph3d.pendingSelectNodeId = null;
+  graph3d.draggingNodeId = id; graph3d.dragIsActive = false;
+  graph3d.dragStartClient = { x: ev.clientX, y: ev.clientY };
+  try { ev.currentTarget.setPointerCapture(ev.pointerId); } catch (err) {}
+  ev.currentTarget.style.cursor = 'grabbing';
+}
+
+function applyArmedNodeEmissiveOverlay() {
+  const armed = graph3d.armDragNodeId;
+  if (!armed) return;
+  const mesh = graph3d.idToMesh.get(armed);
+  if (!mesh?.visible || !mesh.material?.emissive) return;
+  mesh.material.emissive.setHex(0x3d8b6e);
+  mesh.material.emissiveIntensity = 0.44;
+}
+
+function refreshEmissiveAfterArmChange() {
+  if (graph3d.hoveredId) highlightNeighbors3d(graph3d.hoveredId); else resetNodeEmissiveAndOrphans();
+}
+
+function ensureDragPlanes() {
+  if (!graph3d.dragPlane) {
+    graph3d.dragPlane = new THREE.Plane();
+    graph3d.dragPlaneAnchor = new THREE.Vector3();
+    graph3d.dragHit = new THREE.Vector3();
+    graph3d.dragTmpDir = new THREE.Vector3();
+  }
+}
+
+function onCanvasPointerDown(ev) {
+  if (ev.button !== 0 || !graph3d.raycaster || !graph3d.nodeGroup) return;
+  const id = pickNodeFromEvent(ev);
+  if (!id) { graph3d.armDragNodeId = null; refreshEmissiveAfterArmChange(); return; }
+  /* First click on a node = arm it; second click = drag. Dragging on empty = camera. */
+  if (graph3d.armDragNodeId === id) { beginNodeDragGesture(ev, id); return; }
+  ev.stopPropagation();
+  if (graph3d.controls) graph3d.controls.enabled = false;
+  graph3d.pendingSelectNodeId = id; graph3d.draggingNodeId = null; graph3d.dragIsActive = false;
+  graph3d.dragStartClient = { x: ev.clientX, y: ev.clientY };
+  try { ev.currentTarget.setPointerCapture(ev.pointerId); } catch (err) {}
+  ev.currentTarget.style.cursor = 'pointer';
+}
+
+function onCanvasPointerUp(ev) {
+  const el = graph3d.renderer?.domElement;
+  if (graph3d.pendingSelectNodeId) {
+    const pid = graph3d.pendingSelectNodeId;
+    graph3d.pendingSelectNodeId = null;
+    if (el) { try { if (el.hasPointerCapture(ev.pointerId)) el.releasePointerCapture(ev.pointerId); } catch (e) {} el.style.cursor = ''; }
+    if (graph3d.controls) graph3d.controls.enabled = true;
+    graph3d.armDragNodeId = pid;
+    refreshEmissiveAfterArmChange();
+    return;
+  }
+  if (!graph3d.draggingNodeId) return;
+  if (el) { try { if (el.hasPointerCapture(ev.pointerId)) el.releasePointerCapture(ev.pointerId); } catch (e) {} el.style.cursor = ''; }
+  const n = graph3d.idToSimNode.get(graph3d.draggingNodeId);
+  if (n) { n.fx = n.fy = n.fz = null; n.vx = n.vy = n.vz = 0; }
+  if (graph3d.dragIsActive) {
+    graph3d.suppressNextClick = true;
+    if (graph3d.simulation) graph3d.simulation.alphaTarget(0);
+    scheduleLayoutSave();
+  }
+  if (graph3d.controls) graph3d.controls.enabled = true;
+  graph3d.draggingNodeId = null; graph3d.dragIsActive = false;
+  updateEdgeLinePositions();
+  refreshEdgeBoundingSphereIfNeeded();
+}
+
+function resetNodeEmissiveAndOrphans() {
+  const showOrphans = document.getElementById('orphans')?.checked;
+  const withEdges = new Set();
+  graphData.edges.forEach(e => { withEdges.add(e.source); withEdges.add(e.target); });
+  graph3d.idToMesh.forEach((mesh, id) => {
+    if (!mesh.material?.emissive) return;
+    mesh.material.emissive.setHex(0x000000);
+    mesh.material.emissiveIntensity = 0.12;
+    if (showOrphans && !withEdges.has(id) && mesh.visible) {
+      mesh.material.emissive.setHex(0xff9a8b); mesh.material.emissiveIntensity = 0.38;
+    }
+  });
+  applyArmedNodeEmissiveOverlay();
+}
+
+function highlightNeighbors3d(nodeId) {
+  if (!nodeId) { resetNodeEmissiveAndOrphans(); return; }
+  const nb = neighborIdsOf(nodeId);
+  graph3d.idToMesh.forEach((mesh, id) => {
+    if (!mesh.material?.emissive) return;
+    if (nb.has(id)) { mesh.material.emissive.setHex(0xffecd2); mesh.material.emissiveIntensity = 0.45; }
+    else { mesh.material.emissive.setHex(0x000000); mesh.material.emissiveIntensity = 0.1; }
+  });
+  applyArmedNodeEmissiveOverlay();
+}
+
+function applyGraphVisualFilters() {
+  const checked = new Set(Array.from(document.querySelectorAll('.domain-filter:checked')).map(c => c.dataset.domain));
+  const showOrphans = document.getElementById('orphans')?.checked;
+  const withEdges = new Set();
+  graphData.edges.forEach(e => { withEdges.add(e.source); withEdges.add(e.target); });
+  graph3d.idToMesh.forEach((mesh, id) => {
+    const dom = mesh.userData.domain;
+    mesh.visible = checked.has(dom);
+    mesh.userData.isOrphan = !!(showOrphans && !withEdges.has(id) && mesh.visible);
+  });
+  if (graph3d._edgePairs) {
+    graph3d._edgePairs.forEach(ep => { ep.hidden = !graph3d.idToMesh.get(ep.src)?.visible || !graph3d.idToMesh.get(ep.tgt)?.visible; });
+  }
+  updateEdgeLinePositions();
+  refreshSearchDimming();
+  if (graph3d.hoveredId) highlightNeighbors3d(graph3d.hoveredId); else resetNodeEmissiveAndOrphans();
+  applyOrbitCameraLimits();
+}
+
+function refreshSearchDimming() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const shapeF = graph3d.shapeSizeFactor > 0 ? graph3d.shapeSizeFactor : 1;
+  graph3d.idToMesh.forEach((mesh, id) => {
+    if (!mesh.material) return;
+    if (!mesh.userData.baseScale) mesh.userData.baseScale = 1;
+    const base = mesh.userData.baseScale;
+    let mult = 1, opacity = 1;
+    if (!q) {
+      mesh.material.transparent = false;
+    } else {
+      const lab = graph3d.idToSimNode.get(id)?.label || '';
+      const match = id.toLowerCase().includes(q) || lab.toLowerCase().includes(q);
+      mult = match ? 1.18 : 0.72; opacity = match ? 1 : 0.3;
+      mesh.material.transparent = true;
+    }
+    mesh.scale.setScalar(base * shapeF * mult);
+    mesh.material.opacity = opacity;
+    const cssLbl = graph3d.idToLabel.get(id);
+    if (cssLbl?.element) cssLbl.element.style.opacity = String(opacity);
+  });
+  if (!shouldAttachAllLabels()) syncFloatingLabelToHover();
+}
+
+function onCanvasClick(ev) {
+  if (graph3d.suppressNextClick) { graph3d.suppressNextClick = false; return; }
+  const id = pickNodeFromEvent(ev);
+  if (id) openSidebar(id);
+}
+
+function onCanvasPointerMove(ev) {
+  if (graph3d.pendingSelectNodeId) return;
+  if (graph3d.draggingNodeId) {
+    ensureDragPlanes();
+    const sc = graph3d.dragStartClient;
+    const dx = ev.clientX - sc.x, dy = ev.clientY - sc.y;
+    if (!graph3d.dragIsActive && (dx*dx + dy*dy) >= DRAG_THRESHOLD_PX*DRAG_THRESHOLD_PX) {
+      graph3d.dragIsActive = true;
+      const mesh = graph3d.idToMesh.get(graph3d.draggingNodeId);
+      const n = graph3d.idToSimNode.get(graph3d.draggingNodeId);
+      if (mesh && n) {
+        graph3d.dragPlaneAnchor.copy(mesh.position);
+        graph3d.camera.getWorldDirection(graph3d.dragTmpDir);
+        graph3d.dragPlane.setFromNormalAndCoplanarPoint(graph3d.dragTmpDir, graph3d.dragPlaneAnchor);
+        n.fx = n.x; n.fy = n.y; n.fz = n.z;
+      }
+      if (!graph3d.simulation && graph3d.simNodes.length) startForceSimulation();
+      if (graph3d.simulation) graph3d.simulation.alphaTarget(0.22).alpha(Math.max(graph3d.simulation.alpha(), 0.38));
+    }
+    if (graph3d.dragIsActive) {
+      const n = graph3d.idToSimNode.get(graph3d.draggingNodeId);
+      if (n && graph3d.raycaster && graph3d.camera) {
+        const rect = graph3d.renderer.domElement.getBoundingClientRect();
+        graph3d.pointerNdc.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+        graph3d.pointerNdc.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+        graph3d.raycaster.setFromCamera(graph3d.pointerNdc, graph3d.camera);
+        const dist = graph3d.raycaster.ray.intersectPlane(graph3d.dragPlane, graph3d.dragHit);
+        if (dist !== null) {
+          n.x = n.fx = graph3d.dragHit.x; n.y = n.fy = graph3d.dragHit.y; n.z = n.fz = graph3d.dragHit.z;
+          n.vx = n.vy = n.vz = 0;
+          syncMeshesFromSim(); scheduleLayoutSave();
         }
       }
-      if (graph3d.dragIsActive) {
-        const n = graph3d.idToSimNode.get(graph3d.draggingNodeId);
-        if (n && graph3d.raycaster && graph3d.camera) {
-          const rect = graph3d.renderer.domElement.getBoundingClientRect();
-          graph3d.pointerNdc.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-          graph3d.pointerNdc.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
-          graph3d.raycaster.setFromCamera(graph3d.pointerNdc, graph3d.camera);
-          const dist = graph3d.raycaster.ray.intersectPlane(graph3d.dragPlane, graph3d.dragHit);
-          if (dist !== null) {
-            n.x = n.fx = graph3d.dragHit.x;
-            n.y = n.fy = graph3d.dragHit.y;
-            n.z = n.fz = graph3d.dragHit.z;
-            n.vx = n.vy = n.vz = 0;
-            syncMeshesFromSim();
-            scheduleLayoutSave();
-          }
-        }
-      }
-      return;
     }
-    scheduleHoverPick(ev);
+    return;
   }
+  scheduleHoverPick(ev);
+}
 
-  function applyForce3DLayout(doConfirm) {
-    if (!graph3d.simNodes.length) return;
-    if (doConfirm && !confirm(t('reset_layout_confirm'))) return;
+function applyForce3DLayout(doConfirm) {
+  if (!graph3d.simNodes.length) return;
+  if (doConfirm && !confirm(t('reset_layout_confirm'))) return;
+  graph3d.simNodes.forEach(n => { n.x=(Math.random()-0.5)*36; n.y=(Math.random()-0.5)*36; n.z=(Math.random()-0.5)*36; n.vx=n.vy=n.vz=0; });
+  syncMeshesFromSim();
+  startForceSimulation();
+}
+
+// ── Renderer (called by core after data loads) ────────────────────────────────
+function renderGraph() {
+  const container = document.getElementById('graph-container');
+  disposeGraph3d();
+
+  const degree = new Map();
+  graphData.nodes.forEach(n => degree.set(n.id, 0));
+  graphData.edges.forEach(e => { degree.set(e.source, (degree.get(e.source)||0)+1); degree.set(e.target, (degree.get(e.target)||0)+1); });
+
+  graph3d.simNodes = graphData.nodes.map(n => ({
+    id:n.id, label:n.label, domain:n.domain, state:n.state,
+    x:(Math.random()-0.5)*42, y:(Math.random()-0.5)*42, z:(Math.random()-0.5)*42,
+    vx:0, vy:0, vz:0
+  }));
+  graph3d.simNodes.forEach(n => graph3d.idToSimNode.set(n.id, n));
+
+  const w = Math.max(container.clientWidth, 300), h = Math.max(container.clientHeight, 200);
+  graph3d.scene = new THREE.Scene();
+  graph3d.scene.background = new THREE.Color(0x1a1a2e);
+  graph3d.camera = new THREE.PerspectiveCamera(55, w/h, 0.5, 120000);
+  graph3d.camera.position.set(280, 200, 280);
+
+  graph3d.renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
+  graph3d.renderer.setSize(w, h);
+  const dprCap = graphData.nodes.length > LARGE_GRAPH_LABEL_THRESHOLD ? Math.min(window.devicePixelRatio, 1.35) : Math.min(window.devicePixelRatio, 2);
+  graph3d.renderer.setPixelRatio(dprCap);
+  container.appendChild(graph3d.renderer.domElement);
+
+  graph3d.css2dRenderer = new CSS2DRenderer();
+  graph3d.css2dRenderer.setSize(w, h);
+  Object.assign(graph3d.css2dRenderer.domElement.style, { position:'absolute', top:'0', left:'0', pointerEvents:'none' });
+  container.appendChild(graph3d.css2dRenderer.domElement);
+
+  const shapeEl = document.getElementById('slider-shape-size');
+  const textEl  = document.getElementById('slider-label-size');
+  if (shapeEl) graph3d.shapeSizeFactor = parseFloat(shapeEl.value) || 1;
+  if (textEl)  graph3d.labelFontPx     = parseInt(textEl.value, 10) || 11;
+
+  const lblCb = document.getElementById('labels-show-all');
+  if (lblCb) {
+    const sv = localStorage.getItem(STORAGE_3D_LABELS_SHOW_ALL);
+    lblCb.checked = sv === '1' ? true : sv === '0' ? false : graphData.nodes.length <= LARGE_GRAPH_LABEL_THRESHOLD;
+  }
+  const arCb = document.getElementById('auto-rotate');
+  if (arCb) { const ars = localStorage.getItem(STORAGE_3D_AUTO_ROTATE); if (ars === '1') arCb.checked = true; else if (ars === '0') arCb.checked = false; }
+
+  graph3d.controls = new OrbitControls(graph3d.camera, graph3d.renderer.domElement);
+  graph3d.controls.enableDamping = true;
+  graph3d.controls.dampingFactor = 0.08;
+  graph3d.controls.zoomSpeed = 0.55;
+  graph3d.controls.autoRotateSpeed = AUTO_ROTATE_SPEED;
+
+  graph3d.nodeGroup = new THREE.Group();
+  graph3d.edgeGroup = new THREE.Group();
+  graph3d.scene.add(new THREE.AmbientLight(0xffffff, 0.48));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.85);
+  dir.position.set(120, 180, 80);
+  graph3d.scene.add(dir);
+  graph3d.scene.add(graph3d.edgeGroup);
+  graph3d.scene.add(graph3d.nodeGroup);
+
+  graphData.nodes.forEach(gd => {
+    const mesh = createNodeMesh(gd, degree.get(gd.id)||0);
+    mesh.userData.nodeId = gd.id; mesh.userData.domain = gd.domain; mesh.userData.baseScale = 1;
+    graph3d.nodeGroup.add(mesh); graph3d.idToMesh.set(gd.id, mesh);
+    if (shouldAttachAllLabels()) attachNodeLabel(mesh, gd.id, gd.label);
+  });
+  if (!shouldAttachAllLabels()) { ensureFloatingHoverLabel(); syncFloatingLabelToHover(); }
+  applyLabelFontSizes();
+
+  rebuildEdgeIndex();
+  syncMeshesFromSim();
+
+  graph3d.raycaster = new THREE.Raycaster();
+  const canvas = graph3d.renderer.domElement;
+  canvas.addEventListener('click', onCanvasClick);
+  canvas.addEventListener('pointermove', onCanvasPointerMove);
+  canvas.addEventListener('pointerdown', onCanvasPointerDown, true);
+  canvas.addEventListener('pointerup', onCanvasPointerUp);
+  canvas.addEventListener('pointercancel', onCanvasPointerUp);
+  graph3d.resizeHandler = onGraphResize;
+  window.addEventListener('resize', graph3d.resizeHandler);
+
+  animateGraph3dLoop();
+  buildDomainFilters(applyGraphVisualFilters);
+  applyGraphVisualFilters();
+  applyOrbitCameraLimits();
+  attachGraphSafeWheelIfNeeded();
+  syncAutoRotateFromUI();
+}
+
+// ── State update (called by core on state_changed) ────────────────────────────
+function updateNodeState(entityId) {
+  const nodeId = entityToNodeId(entityId);
+  if (!nodeId || !graph3d.idToMesh.has(nodeId)) return;
+  const state = nodeId === entityId
+    ? (states[entityId]?.state ?? 'off')
+    : deviceAggregatedState(nodeId);
+  const gn = graphData.nodes.find(x => x.id === nodeId);
+  if (gn) gn.state = state;
+  const sn = graph3d.idToSimNode.get(nodeId);
+  if (sn) sn.state = state;
+  setMeshMaterialState(graph3d.idToMesh.get(nodeId), nodeId, state);
+}
+
+// ── Live mode toggle: reapply all mesh colours ────────────────────────────────
+function onLiveModeChange() {
+  graph3d.idToMesh.forEach((mesh, nodeId) => {
+    const sn = graph3d.idToSimNode.get(nodeId);
+    const state = sn?.state || 'off';
+    setMeshMaterialState(mesh, nodeId, state);
+  });
+}
+
+// ── Automation/script triggered: flash + pulse + edge particle propagation ────
+function onEntityTriggered(entityId) {
+  if (!graph3d.scene) return;
+  const nodeId = entityToNodeId(entityId);
+  if (!nodeId || !graph3d.idToMesh.has(nodeId)) return;
+  const mesh = graph3d.idToMesh.get(nodeId);
+  const baseScale = mesh.userData.baseScale || 1;
+  const now = performance.now();
+  // Remove any existing animation for this node
+  graph3d.activeAnimations = graph3d.activeAnimations.filter(a => a.nodeId !== nodeId);
+  // Flash: 800 ms
+  graph3d.activeAnimations.push({ nodeId, type: 'flash', t0: now, duration: 800 });
+  // Pulse: starts 200 ms after flash, 1000 ms
+  graph3d.activeAnimations.push({ nodeId, type: 'pulse', t0: now + 200, duration: 1000, baseScale });
+  // Spawn particles on all action/trigger edges from this node
+  const outEdges = graphData.edges.filter(e => e.source === nodeId && (e.type === 'action' || e.type === 'trigger'));
+  outEdges.forEach(edge => {
+    const particleGeo = new THREE.SphereGeometry(4, 6, 5);
+    const particleMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1 });
+    const particleMesh = new THREE.Mesh(particleGeo, particleMat);
+    const a = graph3d.idToSimNode.get(edge.source);
+    if (a) particleMesh.position.set(a.x || 0, a.y || 0, a.z || 0);
+    graph3d.scene.add(particleMesh);
+    // Particle travel time proportional to edge length
+    const b = graph3d.idToSimNode.get(edge.target);
+    const dist = a && b
+      ? Math.sqrt((b.x-a.x)**2 + (b.y-a.y)**2 + (b.z-a.z)**2)
+      : 100;
+    const duration = Math.max(400, Math.min(1800, dist * 8));
+    graph3d.activeParticles.push({ src: edge.source, tgt: edge.target, t0: now, duration, mesh: particleMesh });
+  });
+}
+
+// ── Layout persistence ────────────────────────────────────────────────────────
+function saveLayoutToStorage() {
+  if (!graph3d.simNodes.length) return;
+  const pos = {};
+  graph3d.simNodes.forEach(n => { pos[n.id] = { x:n.x, y:n.y, z:n.z }; });
+  localStorage.setItem(STORAGE_LAYOUT_3D, JSON.stringify(pos));
+  schedulePushLayoutToServer(pos, 'layout_3d');
+}
+
+function loadLayoutFromStorage() {
+  if (!graph3d.simNodes.length) return;
+  const pos = readStoredLayoutRaw(STORAGE_LAYOUT_3D);
+  if (layoutObjectHasKeys(pos)) {
+    let any = false;
+    const zs = [];
     graph3d.simNodes.forEach(n => {
-      n.x = (Math.random() - 0.5) * 36;
-      n.y = (Math.random() - 0.5) * 36;
-      n.z = (Math.random() - 0.5) * 36;
-      n.vx = 0;
-      n.vy = 0;
-      n.vz = 0;
+      const p = pos[n.id];
+      if (!p) return;
+      n.x = p.x; n.y = p.y;
+      n.z = Number.isFinite(Number(p.z)) ? Number(p.z) : (Math.random()-0.5)*48;
+      zs.push(n.z); any = true;
     });
+    if (graph3d.simulation) { graph3d.simulation.stop(); graph3d.simulation = null; }
     syncMeshesFromSim();
-    startForceSimulation();
-  }
-
-  function renderGraph() {
-    const container = document.getElementById('graph-container');
-    disposeGraph3d();
-
-    const degree = new Map();
-    graphData.nodes.forEach(n => degree.set(n.id, 0));
-    graphData.edges.forEach(e => {
-      degree.set(e.source, (degree.get(e.source) || 0) + 1);
-      degree.set(e.target, (degree.get(e.target) || 0) + 1);
-    });
-
-    graph3d.simNodes = graphData.nodes.map(n => ({
-      id: n.id,
-      label: n.label,
-      domain: n.domain,
-      state: n.state,
-      x: (Math.random() - 0.5) * 42,
-      y: (Math.random() - 0.5) * 42,
-      z: (Math.random() - 0.5) * 42,
-      vx: 0,
-      vy: 0,
-      vz: 0
-    }));
-    graph3d.simNodes.forEach(n => graph3d.idToSimNode.set(n.id, n));
-
-    const w = Math.max(container.clientWidth, 300);
-    const h = Math.max(container.clientHeight, 200);
-    graph3d.scene = new THREE.Scene();
-    graph3d.scene.background = new THREE.Color(0x1a1a2e);
-    graph3d.camera = new THREE.PerspectiveCamera(55, w / h, 0.5, 120000);
-    graph3d.camera.position.set(280, 200, 280);
-    graph3d.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    graph3d.renderer.setSize(w, h);
-    const dprCap = graphData.nodes.length > LARGE_GRAPH_LABEL_THRESHOLD
-      ? Math.min(window.devicePixelRatio, 1.35)
-      : Math.min(window.devicePixelRatio, 2);
-    graph3d.renderer.setPixelRatio(dprCap);
-    container.appendChild(graph3d.renderer.domElement);
-    graph3d.css2dRenderer = new CSS2DRenderer();
-    graph3d.css2dRenderer.setSize(w, h);
-    graph3d.css2dRenderer.domElement.style.position = 'absolute';
-    graph3d.css2dRenderer.domElement.style.top = '0';
-    graph3d.css2dRenderer.domElement.style.left = '0';
-    graph3d.css2dRenderer.domElement.style.pointerEvents = 'none';
-    container.appendChild(graph3d.css2dRenderer.domElement);
-    const shapeEl = document.getElementById('slider-shape-size');
-    const textEl = document.getElementById('slider-label-size');
-    if (shapeEl) graph3d.shapeSizeFactor = parseFloat(shapeEl.value) || 1;
-    if (textEl) graph3d.labelFontPx = parseInt(textEl.value, 10) || 11;
-    const lblCb = document.getElementById('labels-show-all');
-    if (lblCb) {
-      const sv = localStorage.getItem(STORAGE_3D_LABELS_SHOW_ALL);
-      if (sv === '1') lblCb.checked = true;
-      else if (sv === '0') lblCb.checked = false;
-      else lblCb.checked = graphData.nodes.length <= LARGE_GRAPH_LABEL_THRESHOLD;
+    centerCameraOnGraph();
+    if (!any) {
+      applyForce3DLayout(false);
+    } else if (any && Math.max(...zs) - Math.min(...zs) < 22) {
+      /* Legacy 2D-like layout: re-spread in 3D */
+      graph3d.simNodes.forEach(n => { n.vx = n.vy = n.vz = 0; });
+      startForceSimulation();
     }
-    const arCb = document.getElementById('auto-rotate');
-    if (arCb) {
-      const ars = localStorage.getItem(STORAGE_3D_AUTO_ROTATE);
-      if (ars === '1') arCb.checked = true;
-      else if (ars === '0') arCb.checked = false;
-    }
-    graph3d.controls = new OrbitControls(graph3d.camera, graph3d.renderer.domElement);
-    graph3d.controls.enableDamping = true;
-    graph3d.controls.dampingFactor = 0.08;
-    graph3d.controls.zoomSpeed = 0.55;
-    graph3d.controls.autoRotateSpeed = AUTO_ROTATE_SPEED;
-
-    graph3d.nodeGroup = new THREE.Group();
-    graph3d.edgeGroup = new THREE.Group();
-    graph3d.scene.add(new THREE.AmbientLight(0xffffff, 0.48));
-    const dir = new THREE.DirectionalLight(0xffffff, 0.85);
-    dir.position.set(120, 180, 80);
-    graph3d.scene.add(dir);
-    graph3d.scene.add(graph3d.edgeGroup);
-    graph3d.scene.add(graph3d.nodeGroup);
-
-    graphData.nodes.forEach(gd => {
-      const deg = degree.get(gd.id) || 0;
-      const mesh = createNodeMesh(gd, deg);
-      mesh.userData.nodeId = gd.id;
-      mesh.userData.domain = gd.domain;
-      mesh.userData.baseScale = 1;
-      graph3d.nodeGroup.add(mesh);
-      graph3d.idToMesh.set(gd.id, mesh);
-      if (shouldAttachAllLabels()) attachNodeLabel(mesh, gd.id, gd.label);
-    });
-    if (!shouldAttachAllLabels()) {
-      ensureFloatingHoverLabel();
-      syncFloatingLabelToHover();
-    }
-    applyLabelFontSizes();
-
-    rebuildEdgeIndex();
-    syncMeshesFromSim();
-
-    graph3d.raycaster = new THREE.Raycaster();
-    graph3d.renderer.domElement.addEventListener('click', onCanvasClick);
-    graph3d.renderer.domElement.addEventListener('pointermove', onCanvasPointerMove);
-    graph3d.renderer.domElement.addEventListener('pointerdown', onCanvasPointerDown, true);
-    graph3d.renderer.domElement.addEventListener('pointerup', onCanvasPointerUp);
-    graph3d.renderer.domElement.addEventListener('pointercancel', onCanvasPointerUp);
-    graph3d.resizeHandler = onGraphResize;
-    window.addEventListener('resize', graph3d.resizeHandler);
-
-    animateGraph3dLoop();
-    buildDomainFilters();
-    applyGraphVisualFilters();
-    applyOrbitCameraLimits();
-    attachGraphSafeWheelIfNeeded();
-    syncAutoRotateFromUI();
+  } else {
+    applyForce3DLayout(false);
   }
+}
 
-  function buildDomainFilters() {
-    const container = document.getElementById('domain-filters');
-    container.innerHTML = DOMAINS.map(d => `
-      <label title="${d.label}">
-        <input type="checkbox" class="domain-filter" data-domain="${d.id}" checked> <i class="fa ${d.icon}"></i>
-      </label>
-    `).join('');
-    container.querySelectorAll('.domain-filter').forEach(cb => {
-      cb.addEventListener('change', () => filterByDomains());
-    });
-  }
+// ── 3D-specific UI bindings ───────────────────────────────────────────────────
+let _graphUIBound = false;
+function bindGraphUI() {
+  if (_graphUIBound) return;
+  _graphUIBound = true;
 
-  function filterByDomains() {
-    if (!graph3d.renderer) return;
-    applyGraphVisualFilters();
-  }
-
-  function toggleOrphans() {
-    if (!graph3d.renderer) return;
-    applyGraphVisualFilters();
-  }
-
-  function onSearchInput() {
+  document.getElementById('btn-reset-layout').onclick = () => applyForce3DLayout(true);
+  document.getElementById('btn-center').onclick = () => centerCameraOnGraph();
+  document.getElementById('search').oninput = () => {
     if (!graph3d.renderer) return;
     refreshSearchDimming();
     const q = document.getElementById('search').value.trim().toLowerCase();
-    if (!q) {
-      if (graph3d.hoveredId) highlightNeighbors3d(graph3d.hoveredId);
-      else resetNodeEmissiveAndOrphans();
-      return;
-    }
-    const first = graph3d.simNodes.find(
-      n => n.id.toLowerCase().includes(q) || (n.label || '').toLowerCase().includes(q)
-    );
-    if (first && graph3d.idToMesh.get(first.id) && graph3d.idToMesh.get(first.id).visible) {
-      const mesh = graph3d.idToMesh.get(first.id);
-      graph3d.controls.target.copy(mesh.position);
-      graph3d.controls.update();
-    }
-  }
+    if (!q) { if (graph3d.hoveredId) highlightNeighbors3d(graph3d.hoveredId); else resetNodeEmissiveAndOrphans(); return; }
+    const first = graph3d.simNodes.find(n => n.id.toLowerCase().includes(q) || (n.label||'').toLowerCase().includes(q));
+    if (first) { const m = graph3d.idToMesh.get(first.id); if (m?.visible) { graph3d.controls.target.copy(m.position); graph3d.controls.update(); } }
+  };
+  document.getElementById('orphans').onchange = () => { if (graph3d.renderer) applyGraphVisualFilters(); };
 
-  let currentSidebarNodeId = null;
-
-  function getEntityDomain(entityId) {
-    const i = (entityId || '').indexOf('.');
-    return i > 0 ? entityId.slice(0, i) : '';
-  }
-
-  function entityControlButtons(entityId) {
-    const domain = getEntityDomain(entityId);
-    const s = states[entityId];
-    const st = s ? s.state : '';
-    if (st === 'unavailable') return '';
-    const e = (d, svc, label, primary) => `<button type="button" class="ha-control ${primary ? 'primary' : ''}" data-entity-id="${escapeHtml(entityId)}" data-domain="${escapeHtml(d)}" data-service="${escapeHtml(svc)}">${escapeHtml(label)}</button>`;
-    if (domain === 'script') return `<div class="sidebar-controls">${e('script', 'turn_on', t('btn_run'), true)}</div>`;
-    if (domain === 'automation') {
-      return `<div class="sidebar-controls">${e('automation', 'trigger', t('btn_trigger'), true)} ${e('automation', 'turn_on', t('btn_enable'), false)} ${e('automation', 'turn_off', t('btn_disable'), false)}</div>`;
-    }
-    if (domain === 'scene') return `<div class="sidebar-controls">${e('scene', 'turn_on', t('btn_enable'), true)}</div>`;
-    if (domain === 'light' || domain === 'switch' || domain === 'fan' || domain === 'input_boolean') {
-      return `<div class="sidebar-controls">${e(domain, 'turn_on', t('on'))} ${e(domain, 'turn_off', t('off'))}</div>`;
-    }
-    if (domain === 'cover') {
-      return `<div class="sidebar-controls">${e('cover', 'open_cover', t('btn_open'))} ${e('cover', 'close_cover', t('btn_close_cover'))} ${e('cover', 'stop_cover', t('btn_stop'))}</div>`;
-    }
-    if (domain === 'lock') {
-      return `<div class="sidebar-controls">${e('lock', 'lock', t('btn_lock'))} ${e('lock', 'unlock', t('btn_unlock'))}</div>`;
-    }
-    return '';
-  }
-
-  function entityAttributesHtml(s) {
-    if (!s) return '';
-    const attrs = s.attributes || {};
-    const show = ['unit_of_measurement', 'current_temperature', 'temperature', 'humidity', 'battery_level', 'brightness', 'current', 'voltage', 'power', 'device_class'];
-    const lines = [];
-    if (s.state !== undefined && s.state !== null) {
-      const u = attrs.unit_of_measurement ? ` ${attrs.unit_of_measurement}` : '';
-      lines.push(t('attr_state') + ': ' + s.state + u);
-    }
-    show.forEach(k => { if (k !== 'unit_of_measurement' && attrs[k] !== undefined) lines.push(`${k}: ${attrs[k]}`); });
-    return lines.length ? `<div class="entity-attr">${lines.map(l => escapeHtml(l)).join(' · ')}</div>` : '';
-  }
-
-  function openSidebar(nodeId) {
-    currentSidebarNodeId = nodeId;
-    const content = document.getElementById('sidebar-content');
-    const links = graphData.edges.filter(e => e.source === nodeId || e.target === nodeId);
-    const out = links.filter(e => e.source === nodeId);
-    const inc = links.filter(e => e.target === nodeId);
-    const node = graphData.nodes.find(n => n.id === nodeId);
-    const linkLabel = (id) => (graphData.nodes.find(n => n.id === id) || {}).label || id;
-    const linksHtml = `
-      <div class="links-section">
-        <h3>${t('links_title', { n: links.length })}</h3>
-        <ul>
-          ${out.map(e => `<li>→ ${escapeHtml(linkLabel(e.target))} (${e.type})</li>`).join('')}
-          ${inc.map(e => `<li>← ${escapeHtml(linkLabel(e.source))} (${e.type})</li>`).join('')}
-        </ul>
-      </div>`;
-
-    if (!node) {
-      content.innerHTML = '<p>' + t('node_unknown') + '</p>';
-      document.getElementById('sidebar').classList.add('open');
-      return;
-    }
-
-    if (node.domain === 'device') {
-      const entityIds = node.entityIds || [];
-      const entityBlocks = entityIds.map(eid => {
-        const s = states[eid];
-        const name = (s && s.attributes && s.attributes.friendly_name) || eid;
-        const st = s ? s.state : '?';
-        const badgeClass = st === 'unavailable' ? 'unavailable' : (st === 'on' ? 'on' : 'off');
-        const attrs = entityAttributesHtml(s);
-        const ctrl = entityControlButtons(eid);
-        return `<div class="entity-block">
-          <div class="entity-head">
-            <span><span class="state-badge ${badgeClass}" style="font-size:10px;">${escapeHtml(st)}</span> ${escapeHtml(name)}</span>
-          </div>
-          <code style="font-size:10px;color:var(--text-dim);">${escapeHtml(eid)}</code>
-          ${attrs}
-          ${ctrl}
-        </div>`;
-      }).join('');
-      content.innerHTML = `
-        <h2>${escapeHtml(node.label)}</h2>
-        <div class="state-badge ${node.state === 'unavailable' ? 'unavailable' : (node.state === 'on' ? 'on' : 'off')}">${escapeHtml(node.state)}</div>
-        <p style="font-size:12px;color:var(--text-dim);">${t('device_entities_count', { n: entityIds.length })}</p>
-        <div class="links-section"><h3>${t('controls_sensors')}</h3></div>
-        ${entityBlocks || '<p style="font-size:13px;color:var(--text-dim);">' + t('no_entities') + '</p>'}
-        ${linksHtml}
-      `;
-    } else {
-      const s = states[nodeId];
-      const name = node.label;
-      const st = s ? s.state : node.state;
-      const badgeClass = st === 'unavailable' ? 'unavailable' : (st === 'on' ? 'on' : 'off');
-      const attrs = entityAttributesHtml(s);
-      const ctrl = entityControlButtons(nodeId);
-      content.innerHTML = `
-        <h2>${escapeHtml(name)}</h2>
-        <div class="state-badge ${badgeClass}">${escapeHtml(st)}</div>
-        <p style="font-size:12px;color:var(--text-dim);">${escapeHtml(nodeId)}</p>
-        ${attrs}
-        ${ctrl}
-        ${linksHtml}
-      `;
-    }
-    document.getElementById('sidebar').classList.add('open');
-  }
-
-  function closeSidebar() {
-    document.getElementById('sidebar').classList.remove('open');
-  }
-
-  function escapeHtml(s) {
-    const div = document.createElement('div');
-    div.textContent = s;
-    return div.innerHTML;
-  }
-
-  function updateNodeState(entityId, newState) {
-    const nodeId = entityToNodeId(entityId);
-    if (!nodeId || !graph3d.idToMesh.has(nodeId)) return;
-    const gn = graphData.nodes.find(x => x.id === nodeId);
-    const state = nodeId === entityId ? newState.state : deviceAggregatedState(nodeId);
-    if (gn) gn.state = state;
-    const sn = graph3d.idToSimNode.get(nodeId);
-    if (sn) sn.state = state;
-    setMeshMaterialState(graph3d.idToMesh.get(nodeId), state);
-  }
-
-  function subscribeStateChanged() {
-    wsSend('subscribe_events', { event_type: 'state_changed' }).catch(() => {});
-  }
-
-  function getStoredLayout() {
-    return readStoredLayoutRaw(STORAGE_LAYOUT_3D);
-  }
-
-  function saveLayoutToStorage() {
-    if (!graph3d.simNodes.length) return;
-    const pos = {};
-    graph3d.simNodes.forEach(n => {
-      pos[n.id] = { x: n.x, y: n.y, z: n.z };
-    });
-    localStorage.setItem(STORAGE_LAYOUT_3D, JSON.stringify(pos));
-    schedulePushLayoutToServer(pos);
-  }
-
-  function loadLayoutFromStorage() {
-    if (!graph3d.simNodes.length) return;
-    const pos = getStoredLayout();
-    if (pos && typeof pos === 'object' && Object.keys(pos).length) {
-      let any = false;
-      const zs = [];
-      graph3d.simNodes.forEach(n => {
-        const p = pos[n.id];
-        if (p) {
-          n.x = p.x;
-          n.y = p.y;
-          if (p.z != null && Number.isFinite(Number(p.z))) {
-            n.z = Number(p.z);
-          } else {
-            n.z = (Math.random() - 0.5) * 48;
-          }
-          zs.push(n.z);
-          any = true;
-        }
-      });
-      if (graph3d.simulation) {
-        graph3d.simulation.stop();
-        graph3d.simulation = null;
-      }
-      const zSpread = zs.length ? Math.max(...zs) - Math.min(...zs) : 0;
-      const flatLike2dLegacy = any && zSpread < 22;
-      syncMeshesFromSim();
-      centerCameraOnGraph();
-      if (!any) {
-        applyForce3DLayout(false);
-      } else if (flatLike2dLegacy) {
-        graph3d.simNodes.forEach(n => {
-          n.vx = n.vy = n.vz = 0;
-        });
-        startForceSimulation();
-      }
-    } else {
-      applyForce3DLayout(false);
-    }
-  }
-
-  let graphUIBound = false;
-  function bindGraphUI() {
-    if (graphUIBound) return;
-    graphUIBound = true;
-    document.getElementById('btn-reset-layout').onclick = () => applyForce3DLayout(true);
-    document.getElementById('btn-center').onclick = () => centerCameraOnGraph();
-    document.getElementById('sidebar-close').onclick = () => closeSidebar();
-    document.getElementById('search').oninput = onSearchInput;
-    document.getElementById('orphans').onchange = toggleOrphans;
-    const shapeSl = document.getElementById('slider-shape-size');
-    const textSl = document.getElementById('slider-label-size');
-    if (shapeSl) {
-      const sv = localStorage.getItem(STORAGE_3D_SHAPE_SCALE);
-      if (sv != null && !Number.isNaN(parseFloat(sv))) {
-        shapeSl.value = String(Math.min(2.3, Math.max(0.35, parseFloat(sv))));
-      }
+  const shapeSl = document.getElementById('slider-shape-size');
+  if (shapeSl) {
+    const sv = localStorage.getItem(STORAGE_3D_SHAPE_SCALE);
+    if (sv != null && !Number.isNaN(parseFloat(sv))) shapeSl.value = String(Math.min(2.3, Math.max(0.35, parseFloat(sv))));
+    graph3d.shapeSizeFactor = parseFloat(shapeSl.value) || 1;
+    shapeSl.addEventListener('input', () => {
       graph3d.shapeSizeFactor = parseFloat(shapeSl.value) || 1;
-      shapeSl.addEventListener('input', () => {
-        graph3d.shapeSizeFactor = parseFloat(shapeSl.value) || 1;
-        localStorage.setItem(STORAGE_3D_SHAPE_SCALE, shapeSl.value);
-        if (graph3d.renderer) refreshSearchDimming();
-      });
-    }
-    if (textSl) {
-      const tv = localStorage.getItem(STORAGE_3D_LABEL_PX);
-      if (tv != null && !Number.isNaN(parseInt(tv, 10))) {
-        const n = Math.min(24, Math.max(7, parseInt(tv, 10)));
-        textSl.value = String(n);
-      }
+      localStorage.setItem(STORAGE_3D_SHAPE_SCALE, shapeSl.value);
+      if (graph3d.renderer) refreshSearchDimming();
+    });
+  }
+
+  const textSl = document.getElementById('slider-label-size');
+  if (textSl) {
+    const tv = localStorage.getItem(STORAGE_3D_LABEL_PX);
+    if (tv != null && !Number.isNaN(parseInt(tv, 10))) textSl.value = String(Math.min(24, Math.max(7, parseInt(tv, 10))));
+    graph3d.labelFontPx = parseInt(textSl.value, 10) || 11;
+    textSl.addEventListener('input', () => {
       graph3d.labelFontPx = parseInt(textSl.value, 10) || 11;
-      textSl.addEventListener('input', () => {
-        graph3d.labelFontPx = parseInt(textSl.value, 10) || 11;
-        localStorage.setItem(STORAGE_3D_LABEL_PX, textSl.value);
-        applyLabelFontSizes();
-        if (!shouldAttachAllLabels()) syncFloatingLabelToHover();
-      });
-    }
-    const lblAll = document.getElementById('labels-show-all');
-    if (lblAll) {
-      lblAll.addEventListener('change', () => {
-        localStorage.setItem(STORAGE_3D_LABELS_SHOW_ALL, lblAll.checked ? '1' : '0');
-        if (graph3d.renderer) reapplyLabelMode();
-      });
-    }
-    const arRot = document.getElementById('auto-rotate');
-    if (arRot) {
-      arRot.addEventListener('change', () => {
-        localStorage.setItem(STORAGE_3D_AUTO_ROTATE, arRot.checked ? '1' : '0');
-        syncAutoRotateFromUI();
-      });
-    }
-    const dbgCam = document.getElementById('debug-cam-toggle');
-    if (dbgCam) {
-      try {
-        dbgCam.checked = sessionStorage.getItem(STORAGE_3D_DEBUG_CAM) === '1';
-      } catch (e) { /* ignore */ }
-      dbgCam.addEventListener('change', () => {
-        try {
-          sessionStorage.setItem(STORAGE_3D_DEBUG_CAM, dbgCam.checked ? '1' : '0');
-        } catch (e2) { /* ignore */ }
-        updateDebugCamPanel();
-      });
-    }
-    document.getElementById('sidebar-content').addEventListener('click', (e) => {
-      const btn = e.target.closest('button.ha-control');
-      if (!btn) return;
-      const entityId = btn.dataset.entityId;
-      const domain = btn.dataset.domain;
-      const service = btn.dataset.service;
-      if (!entityId || !domain || !service) return;
-      btn.disabled = true;
-      callService(domain, service, { entity_id: entityId })
-        .then(() => { setTimeout(() => { if (currentSidebarNodeId) openSidebar(currentSidebarNodeId); }, 400); })
-        .catch(() => {})
-        .finally(() => { btn.disabled = false; });
+      localStorage.setItem(STORAGE_3D_LABEL_PX, textSl.value);
+      applyLabelFontSizes();
+      if (!shouldAttachAllLabels()) syncFloatingLabelToHover();
     });
   }
 
-  function exportBackup(includeToken) {
-    const baseUrl = getBaseUrl();
-    const layout3 = readStoredLayoutRaw(STORAGE_LAYOUT_3D);
-    const layout2 = readStoredLayoutRaw(STORAGE_LAYOUT_2D);
-    const data = {
-      version: 2,
-      baseUrl: baseUrl || undefined,
-      layout_3d: layout3 && Object.keys(layout3).length ? layout3 : undefined,
-      layout_2d: layout2 && Object.keys(layout2).length ? layout2 : undefined,
-      layout: layout3 && Object.keys(layout3).length ? layout3 : undefined,
-      token: includeToken ? getToken() || undefined : undefined
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'ha-graph-backup.json';
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
+  const lblAll = document.getElementById('labels-show-all');
+  if (lblAll) lblAll.addEventListener('change', () => {
+    localStorage.setItem(STORAGE_3D_LABELS_SHOW_ALL, lblAll.checked ? '1' : '0');
+    if (graph3d.renderer) reapplyLabelMode();
+  });
 
-  function importBackup(file) {
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const data = JSON.parse(reader.result);
-        if (data.baseUrl != null) setBaseUrl(String(data.baseUrl).replace(/\/$/, ''));
-        if (data.layout_3d != null) localStorage.setItem(STORAGE_LAYOUT_3D, JSON.stringify(data.layout_3d));
-        if (data.layout_2d != null) localStorage.setItem(STORAGE_LAYOUT_2D, JSON.stringify(data.layout_2d));
-        if (data.layout != null && !data.layout_3d) localStorage.setItem(STORAGE_LAYOUT_3D, JSON.stringify(data.layout));
-        if (data.layout != null && !data.layout_2d) localStorage.setItem(STORAGE_LAYOUT_2D, JSON.stringify(layoutTo2d(data.layout)));
-        if (data.token != null) setToken(data.token);
-        document.getElementById('base-url-input').value = data.baseUrl != null ? data.baseUrl : getBaseUrl();
-        if (data.token) document.getElementById('token-input').value = '';
-        await pushServerConfig({
-          token: getToken() || undefined,
-          base_url: getBaseUrl() || undefined,
-          layout_3d: readStoredLayoutRaw(STORAGE_LAYOUT_3D) || undefined,
-          layout_2d: readStoredLayoutRaw(STORAGE_LAYOUT_2D) || undefined
-        });
-        location.reload();
-      } catch (e) {
-        alert(t('invalid_backup'));
-      }
-    };
-    reader.readAsText(file);
-  }
+  const arRot = document.getElementById('auto-rotate');
+  if (arRot) arRot.addEventListener('change', () => {
+    localStorage.setItem(STORAGE_3D_AUTO_ROTATE, arRot.checked ? '1' : '0');
+    syncAutoRotateFromUI();
+  });
 
-  async function initAuthPanel() {
-    updateServerSyncPill('checking');
-    const baseInput = document.getElementById('base-url-input');
-    const storedBase = localStorage.getItem(STORAGE_BASE);
-    if (storedBase) baseInput.value = storedBase;
-    await syncFromServer();
-    ensureLayoutsMigratedFromLegacy();
-    if (!baseInput.value.trim()) baseInput.value = getBaseUrl();
-    if (getToken()) {
-      showAuth(false);
-      wsConnect();
-    } else {
-      showAuth(true);
-    }
-    await refreshServerSyncIndicator();
-  }
-  document.getElementById('auth-save').onclick = async () => {
-    const base = document.getElementById('base-url-input').value.trim();
-    const token = document.getElementById('token-input').value.trim();
-    if (base) setBaseUrl(base.replace(/\/$/, ''));
-    if (token) setToken(token);
-    document.getElementById('token-input').value = '';
-    const authPatch = {
-      token: getToken() || undefined,
-      base_url: getBaseUrl() || undefined
-    };
-    const l3 = readStoredLayoutRaw(STORAGE_LAYOUT_3D);
-    const l2 = readStoredLayoutRaw(STORAGE_LAYOUT_2D);
-    if (l3 && Object.keys(l3).length) authPatch.layout_3d = l3;
-    if (l2 && Object.keys(l2).length) authPatch.layout_2d = l2;
-    const res = await pushServerConfig(authPatch);
-    showAuthSaveResult(res);
-    setTimeout(() => {
-      showAuth(false);
-      if (ws) ws.close();
-      wsConnect();
-      refreshServerSyncIndicator().catch(() => {});
-    }, 450);
-  };
-  document.getElementById('auth-close').onclick = () => showAuth(false);
-  document.getElementById('btn-backup').onclick = () => showAuth(true);
-  document.getElementById('btn-export-backup').onclick = () => {
-    const includeToken = document.getElementById('export-include-token').checked;
-    exportBackup(includeToken);
-  };
-  document.getElementById('btn-import-backup').onclick = () => document.getElementById('import-backup-file').click();
-  document.getElementById('import-backup-file').onchange = (e) => {
-    const f = e.target.files[0];
-    if (f) importBackup(f);
-    e.target.value = '';
-  };
-  document.querySelectorAll('.lang-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const lang = btn.dataset.lang;
-      if (lang && (lang === 'en' || lang === 'fr')) {
-        localStorage.setItem(STORAGE_LANG, lang);
-        location.reload();
-      }
+  const dbgCam = document.getElementById('debug-cam-toggle');
+  if (dbgCam) {
+    try { dbgCam.checked = sessionStorage.getItem(STORAGE_3D_DEBUG_CAM) === '1'; } catch (e) {}
+    dbgCam.addEventListener('change', () => {
+      try { sessionStorage.setItem(STORAGE_3D_DEBUG_CAM, dbgCam.checked ? '1' : '0'); } catch (e) {}
+      updateDebugCamPanel();
     });
-  });
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) refreshServerSyncIndicator().catch(() => {});
-  });
-  applyI18n();
-  bindGraphUI();
-  (async () => {
-    await initAuthPanel();
-  })();
+  }
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+registerRenderer({ renderGraph, updateNodeState, loadLayoutFromStorage, onLiveModeChange, onEntityTriggered });
+applyI18n();
+bindCommonUI();
+bindGraphUI();
+document.getElementById('btn-legend')?.addEventListener('click', () => {
+  buildLegend('ha-legend-panel');
+  document.getElementById('ha-legend-panel')?.classList.toggle('hidden');
+});
+await initAuthPanel();
   </script>
 </body>
 </html>
